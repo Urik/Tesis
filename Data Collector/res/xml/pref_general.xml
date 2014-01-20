@@ -1,0 +1,22 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <EditTextPreference
+        android:key="my_phone_number_preference"
+        android:title="My phone number"
+        android:defaultValue=""/>
+    <EditTextPreference
+        android:key="destination_phone_number_preference"
+        android:title="Destination phone number"
+        android:defaultValue="123456789" />
+    <EditTextPreference
+        android:key="gap_between_calls_preference"
+        android:title="Time gap between calls"
+        android:contentDescription="in milliseconds"
+        android:defaultValue="60000" />
+    <EditTextPreference
+        android:key="signal_change_threshold"
+        android:title="Signal change threshold" />
+    <EditTextPreference
+        android:key="distance_threshold"
+        android:title="Distanece between calls"
+        android:contentDescription="In meters" />
+</PreferenceScreen>
