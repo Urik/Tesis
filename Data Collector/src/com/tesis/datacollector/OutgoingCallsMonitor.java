@@ -24,6 +24,7 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
     private OutgoingCallsMonitorHelper outgoingCallsMonitor;
 
     private Collection<CallIsInProgressListener> listeners;
+    private int actualState;
 
     public OutgoingCallsMonitor(Context context){
         super();
@@ -36,7 +37,7 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
     @Override
     public void onCallStateChanged(int state, String incomingNumber){
         super.onCallStateChanged(state, incomingNumber);
-
+        actualState = state;
         switch (state){
             case TelephonyManager.CALL_STATE_IDLE:
                 if(previousState == PhoneState.OffHook){
@@ -100,6 +101,10 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
         this.lastCalledNumber = number;
         Log.d("tesis", "Phone is making a call disparado a las " + date.getTime());
     }
+
+	public int getActualState() {
+		return actualState;
+	}
 }
 
 enum PhoneState {

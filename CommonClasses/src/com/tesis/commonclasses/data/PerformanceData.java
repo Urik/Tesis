@@ -11,9 +11,8 @@ public abstract class PerformanceData extends Data {
     private Float batteryLevel;
     private String operatorName;
     private String phoneNumber;
-    private Long downloadLatency;
 
-    protected PerformanceData(String typeOfData, Float currentSignal, Float batteryLevel, Location location, String operatorName, String phoneNumber, Long downloadLatency) {
+    protected PerformanceData(String typeOfData, Float currentSignal, Float batteryLevel, Location location, String operatorName, String phoneNumber) {
         super(typeOfData, phoneNumber);
         this.currentSignal = currentSignal;
         this.batteryLevel = batteryLevel;
@@ -27,7 +26,6 @@ public abstract class PerformanceData extends Data {
         }
         this.operatorName = operatorName;
         this.phoneNumber = phoneNumber;
-        this.downloadLatency = downloadLatency;
     }
 
     @Override
@@ -40,7 +38,6 @@ public abstract class PerformanceData extends Data {
             jsonObject.put("batteryLevel", batteryLevel);
             jsonObject.put("operatorName", operatorName);
             jsonObject.put("phoneNumber", phoneNumber);
-            jsonObject.put("downloadLatency", downloadLatency);
 
             return jsonObject;
         } catch (Exception e) {

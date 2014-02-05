@@ -10,7 +10,7 @@ public class FailedLatencyCheckData extends PerformanceData {
 			Float batteryLevel, Location location, String operatorName,
 			String phoneNumber, Long downloadLatency) {
 		super("failed_data", currentSignal, batteryLevel, location, operatorName,
-				phoneNumber, downloadLatency);
+				phoneNumber);
 		}
 
 	@Override

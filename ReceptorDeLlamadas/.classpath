@@ -5,8 +5,6 @@
 	<classpathentry kind="con" path="com.android.ide.eclipse.adt.ANDROID_FRAMEWORK"/>
 	<classpathentry exported="true" kind="con" path="com.android.ide.eclipse.adt.LIBRARIES"/>
 	<classpathentry exported="true" kind="con" path="com.android.ide.eclipse.adt.DEPENDENCIES"/>
-	<classpathentry kind="lib" path="libs/activation.jar"/>
-	<classpathentry kind="lib" path="libs/additionnal.jar"/>
-	<classpathentry kind="lib" path="libs/javax.mail.jar"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/CommonClasses"/>
 	<classpathentry kind="output" path="bin/classes"/>
 </classpath>

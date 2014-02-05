@@ -5,7 +5,7 @@
     android:versionName="1.0" >
 
     <uses-sdk
-        android:minSdkVersion="9"
+        android:minSdkVersion="8"
         android:targetSdkVersion="16" />
 
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -17,11 +17,14 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    
 
     <application
         android:allowBackup="true"
@@ -49,17 +52,17 @@
             android:name="com.tesis.datacollector.TurnOffScreenActivity"
             android:label="@string/title_activity_turn_off_screen" >
         </activity>
-        <receiver
-		    android:name="MyAdminReceiver"
-		    android:permission="android.permission.BIND_DEVICE_ADMIN">
-		    <meta-data
-		        android:name="android.app.device_admin"
-		        android:resource="@xml/admin"/>
+<!--         <receiver 
+ 		    android:name="MyAdminReceiver" 
+ 		    android:permission="android.permission.BIND_DEVICE_ADMIN"> 
+ 		    <meta-data 
+ 		        android:name="android.app.device_admin"
+ 		        android:resource="@xml/admin"/>
 		
-		    <intent-filter>
-		        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
-		    </intent-filter>
-		</receiver>
+ 		    <intent-filter>
+ 		        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+ 		    </intent-filter>
+ 		</receiver> -->
     </application>
 
 </manifest>

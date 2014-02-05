@@ -9,13 +9,13 @@ import org.json.JSONObject;
 
 import java.util.Date;
 
-public class CallData extends PerformanceData {
+public class CallMadeData extends PerformanceData {
 
     private final Long timeOfCall;
     private final String destinationNumber;
 
-    public CallData(float currentSignal, float batteryLevel, Location location, Long timeOfCall, String destinationNumber, String operatorName, String phoneNumber, Long downloadLatency) {
-        super("call", currentSignal, batteryLevel, location, operatorName, phoneNumber, downloadLatency);
+    public CallMadeData(float currentSignal, float batteryLevel, Location location, Long timeOfCall, String destinationNumber, String operatorName, String phoneNumber) {
+        super("call_made", currentSignal, batteryLevel, location, operatorName, phoneNumber);
         this.timeOfCall = timeOfCall;
         this.destinationNumber = destinationNumber;
     }

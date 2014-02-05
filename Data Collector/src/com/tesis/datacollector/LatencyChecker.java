@@ -10,6 +10,8 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 
+import com.tesis.commonclasses.Constants;
+
 import android.os.AsyncTask;
 
 public class LatencyChecker extends AsyncTask<Void, Void, Long>{
@@ -21,7 +23,7 @@ public class LatencyChecker extends AsyncTask<Void, Void, Long>{
 	}
 	@Override
 	protected Long doInBackground(Void... params) {
-        String host = "http://cdn.adbooth.net/src/test.txt";
+        String host = Constants.LatencyTestAddress;
         long time = 0l;
         HttpGet request = new HttpGet(host);
         HttpParams httpParameters = new BasicHttpParams();

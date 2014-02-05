@@ -34,7 +34,7 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
     public LocationMonitor(Context context) {
         this.context = context;
         locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-        executor.schedule(getLocationAcquisitionTimeoutRunnable(), 5, TimeUnit.MINUTES);
+        //executor.schedule(getLocationAcquisitionTimeoutRunnable(), 300, TimeUnit.SECONDS);
         gpsStatusListener.addListener(this);
     }
 
@@ -54,7 +54,7 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
 					public void run() {
 						startListening();
 					}
-				}, 5, TimeUnit.MINUTES);
+				}, 300, TimeUnit.SECONDS);
 			}
 		};
 	}
@@ -62,10 +62,13 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
     public void startListening() {
         locationListener = new LocationListener() {
             public void onLocationChanged(Location location) {
-            	locationHasBeenSet = true;
-            	//This needs to be called when the location changes so that the gpsStatusListener can check if the GPS signal has been fixed.
-            	gpsStatusListener.setLastLocationInMillis(SystemClock.elapsedRealtime());
-                handleLocationChanged(location);
+            	float accuracy = location.getAccuracy();
+//				if (accuracy < 100) {
+//	            	locationHasBeenSet = true;
+	            	//This needs to be called when the location changes so that the gpsStatusListener can check if the GPS signal has been fixed.
+//	            	gpsStatusListener.setLastLocationInMillis(SystemClock.elapsedRealtime());
+            		handleLocationChanged(location);
+  //          	}
             }
 
             public void onStatusChanged(String provider, int status, Bundle extras) {}
@@ -78,14 +81,15 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
         };
         
         if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-	        locationManager.addGpsStatusListener(gpsStatusListener);
+//	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+	        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+//	        locationManager.addGpsStatusListener(gpsStatusListener);
         }
     }
 
     public void stopListening() {
     	if (locationManager != null) {
-	        locationManager.removeGpsStatusListener(gpsStatusListener);
+	//        locationManager.removeGpsStatusListener(gpsStatusListener);
 	        locationManager.removeUpdates(locationListener);
 	        executor.shutdownNow();
 	        locationManager = null;

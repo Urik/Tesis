@@ -1,7 +1,9 @@
 package com.tesis.datacollector;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.util.Date;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -19,7 +21,10 @@ import org.apache.http.params.HttpParams;
 import org.json.JSONObject;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.Service;
+import android.app.TaskStackBuilder;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -27,6 +32,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.location.Location;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo.State;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -38,7 +45,9 @@ import android.preference.PreferenceManager;
 import android.provider.CallLog;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
+import android.support.v4.app.NotificationCompat;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Window;
 import android.view.WindowManager.LayoutParams;
@@ -46,9 +55,10 @@ import android.widget.Toast;
 
 import com.tesis.commonclasses.Constants;
 import com.tesis.commonclasses.TimeSynchronizer;
-import com.tesis.commonclasses.data.CallData;
+import com.tesis.commonclasses.data.CallMadeData;
 import com.tesis.commonclasses.data.FailedLatencyCheckData;
 import com.tesis.commonclasses.data.DataList;
+import com.tesis.commonclasses.data.InternetCheckData;
 import com.tesis.commonclasses.data.SMSData;
 import com.tesis.commonclasses.listeners.EventsProducer;
 import com.tesis.commonclasses.listeners.SignalChangedListener;
@@ -67,11 +77,10 @@ public class DataCollectorService extends Service implements SignalChangedListen
     private PhoneSignalMonitor signalMonitor;
     private BatteryLevelInspector batteryInspector;
     private OutgoingCallsMonitor callsMonitor;
-    private TimeSynchronizer synchronizer;
+    private TimeSynchronizer timeSynchronizer;
     private TrafficStats trafficMonitor;
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(10);
-    private SignalAvg signalAvg;
-    PowerManager powerManager;
+    private PowerManager powerManager;
 
     //Datos a enviar
     private Float currentSignal;
@@ -84,9 +93,12 @@ public class DataCollectorService extends Service implements SignalChangedListen
     //Datos de configuracion
     private String mPhoneNumber;
     private String destinationNumber;
+    
+    private Runnable makeACallStrategy;
+    private Runnable testLatencyStrategy;
 
     //Lista de paquetes
-    private final DataList dataList = new DataList();
+    private final DataList dataList = new DataList(this);
     private SharedPreferences preferences;
 
     //TS de ultima llamada
@@ -101,7 +113,8 @@ public class DataCollectorService extends Service implements SignalChangedListen
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-
+        makeACallStrategy = getEmptyTask();
+        testLatencyStrategy = getEmptyTask();        
         //Obtener el proveedor de telefonia
         operatorName = telephonyManager.getNetworkOperatorName();
 
@@ -117,14 +130,12 @@ public class DataCollectorService extends Service implements SignalChangedListen
         batteryInspector = new BatteryLevelInspector(this);
         callsMonitor = new OutgoingCallsMonitor(this);
         trafficMonitor = new TrafficStats();
-        synchronizer = new TimeSynchronizer(this, mPhoneNumber, Constants.ServerAddress);
-        synchronizer.synchronizeTime();
-        signalAvg = new SignalAvg();
+        timeSynchronizer = new TimeSynchronizer(this, mPhoneNumber, Constants.ServerAddress);
+        timeSynchronizer.synchronizeTime();
         currentSignal = 0f;
         powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
         
-
         /// Registra el observer para los SMS
         SMSObserver smsObserver = new SMSObserver(new Handler(), this);
         ContentResolver contentResolver = this.getContentResolver();
@@ -137,20 +148,58 @@ public class DataCollectorService extends Service implements SignalChangedListen
         addAndRegisterMonitor(locationRetriever);
         addAndRegisterMonitor(signalMonitor);
         addAndRegisterMonitor(callsMonitor);
+        
+        executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				forceMobileConnectionForAddress(DataCollectorService.this, Constants.LatencyTestAddress);			
+			}
+		});
 
         executor.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
 				try {
 					dataList.sendDataListAndClearIfSuccessful();
-				} catch (URISyntaxException e) {
+				} catch (Throwable e) {
 					e.printStackTrace();
 				}
 			}
-		}, 0, 30, TimeUnit.MINUTES);
+		}, 0, 60, TimeUnit.SECONDS);
         
-        return super.onStartCommand(intent, flags, startId);
+        executor.scheduleAtFixedRate(new Runnable() {
+			@Override
+			public void run() {
+				testLatencyStrategy.run();
+			}
+		}, 0, 120, TimeUnit.SECONDS);
+        
+        Intent resultIntent = new Intent(this, MainActivity.class);
+        Notification notification = new NotificationCompat.Builder(this)
+        	.setSmallIcon(R.drawable.ic_stat_dc)
+        	.setContentTitle("DataCollector")
+        	.setContentText("Tesis Data Collector is working")
+        	.setContentIntent(PendingIntent.getActivity(this, 1, resultIntent, PendingIntent.FLAG_UPDATE_CURRENT))
+        	.build();
+        
+        startForeground(1, notification);
+        
+        return START_STICKY;
     }
+
+	private Runnable getTestLatencyTask() {
+		return new Runnable() {
+			
+			@Override
+			public void run() {
+				try {
+					testLatency();
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
+			}
+		};
+	}
 
 	private void setPhoneNumbers(TelephonyManager telephonyManager) {
         mPhoneNumber = telephonyManager.getLine1Number();
@@ -168,7 +217,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     	signalMonitor.stopListening();
     	callsMonitor.stopListening();
     	executor.shutdownNow();
-    	unregisterReceiver(synchronizer);
+    	unregisterReceiver(timeSynchronizer);
 		super.onDestroy();
 	}
 
@@ -177,7 +226,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
         producer.startListening();
     }
 
-    public Runnable getMakeACallTask() {
+    public Runnable getPositionAqcuiredMakeACallTask() {
         return new Runnable() {
             @Override
             public void run(){
@@ -188,6 +237,14 @@ public class DataCollectorService extends Service implements SignalChangedListen
                 }
             }
       };
+    }
+    
+    public Runnable getEmptyTask() {
+    	return new Runnable() {
+			
+			@Override
+			public void run() {}
+		};
     }
     
     public Runnable getHandleLatencyErrorsTask() {
@@ -274,15 +331,14 @@ public class DataCollectorService extends Service implements SignalChangedListen
 
     @Override
     public void handleCallIsInProgress(Date startDate, String destination) {
-    	turnOffScreen();
         Log.d(Constants.LogTag, String.format("Call is in progress: %s, %s", startDate, destination));
         lastDestination = destination;
 
         lastCallDate = startDate; //registrar TS de ultima llamada
         lastCallLocation = lastKnownLocation; //registrar locacion de ultima llamada
-        CallData callData = null;
+        CallMadeData callData = null;
         try {
-            callData = new CallData(currentSignal,batteryLevel, lastKnownLocation,(new Date()).getTime(),lastDestination, operatorName, mPhoneNumber, testLatency());
+            callData = new CallMadeData(currentSignal,batteryLevel, lastKnownLocation,(new Date()).getTime(),lastDestination, operatorName, mPhoneNumber);
             JSONObject callJson = callData.getAsJson();
             System.out.println("********* OBJETO JSON AGREGADO A LA LISTA: " + callJson.toString());
             dataList.addToPack(callJson);
@@ -293,7 +349,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
         if(futureCall != null) //Si sigue activo el timer cancelarlo
             futureCall.cancel(true);
         //Programar proxima llamada
-        futureCall = executor.scheduleAtFixedRate(getMakeACallTask(), 0, 1, TimeUnit.MINUTES);
+        futureCall = executor.schedule(makeACallStrategy, 60, TimeUnit.SECONDS);
         System.out.println("*********Resetear Timeout");
 
         DeleteCallLogByNumber(destinationNumber);
@@ -310,15 +366,20 @@ public class DataCollectorService extends Service implements SignalChangedListen
 	@Override
     public void handleLocationChanged(Location location) {
         Log.d(Constants.LogTag, String.format("Location has changed: %s", location));
-        this.lastKnownLocation = location;
-        //Si la nueva loacacion difiere de la ultima en la que se llamo X metros, se deben generar datos
-        if (lastCallLocation != null && lastCallLocation.distanceTo(lastKnownLocation) >= 1f) {
-            try {
+        if (location.getAccuracy() < 100) {
+        	makeACallStrategy = getPositionAqcuiredMakeACallTask();
+        	testLatencyStrategy = getTestLatencyTask();
+        	Location previousLocation = lastKnownLocation;
+	        this.lastKnownLocation = location;
+	        
+	        //Si la nueva loacacion difiere de la ultima en la que se llamo X metros, se deben generar datos
+	        if (previousLocation == null || lastCallLocation == null || lastCallLocation != null && lastCallLocation.distanceTo(lastKnownLocation) >= 15f) {
                 Log.d(Constants.LogTag, "Cambio Locacion");
-                tryToCall();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+                makeACallStrategy.run();
+	        }
+        } else {
+        	makeACallStrategy = getEmptyTask();
+        	testLatencyStrategy = getEmptyTask();
         }
     }
 
@@ -332,7 +393,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     public void handleSMSSent(long timeInMs, Date initDate, Date finishDate) {
         SMSData messageData = null;
         try {
-            messageData = new SMSData(currentSignal,batteryLevel, lastKnownLocation,timeInMs,lastDestination, operatorName, initDate.getTime(), mPhoneNumber, testLatency());
+            messageData = new SMSData(currentSignal,batteryLevel, lastKnownLocation,timeInMs,lastDestination, operatorName, initDate.getTime(), mPhoneNumber);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -352,18 +413,12 @@ public class DataCollectorService extends Service implements SignalChangedListen
 
         oldSignal = currentSignal;
         int strength = args.getNewSignalStrength().getGsmSignalStrength();
-        double signalAsPercentage = strength * 100 / (double) 31;
-        currentSignal = (float) signalAsPercentage;
-        signalAvg.addSignalValue(currentSignal);
+        currentSignal = (float) strength;
         Log.d(Constants.LogTag, String.format("The signal has changed from %s to %s", oldSignal, currentSignal));
         //Si la senial cambio de golpe en X porcentaje, se deben generar datos
-        if(Math.abs(currentSignal)-Math.abs(oldSignal)>1){
-            try {
-                System.out.println("*********Cambio de senial");
-                tryToCall();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        if(Math.abs(currentSignal-Math.abs(oldSignal))>3){
+            System.out.println("*********Cambio de senial");
+            makeACallStrategy.run();
         }
     }
 
@@ -378,20 +433,21 @@ public class DataCollectorService extends Service implements SignalChangedListen
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         if (key.equals(SettingsActivity.PHONE_NUMBER)) {
             mPhoneNumber = sharedPreferences.getString(SettingsActivity.PHONE_NUMBER, "");
-            synchronizer.setPhoneNumber(mPhoneNumber);
+            timeSynchronizer.setPhoneNumber(mPhoneNumber);
         }
     }
 
 
-    public long testLatency() throws IOException, Exception {
+    public void testLatency() throws InterruptedException, ExecutionException {
         AsyncTask<Void, Void, Long> latencyCheckTask = new LatencyChecker(getHandleLatencyErrorsTask()).execute();
-        return latencyCheckTask.get();
+        Long timeInMs = latencyCheckTask.get();
+        dataList.addToPack(new InternetCheckData(currentSignal, batteryLevel, lastKnownLocation, operatorName, mPhoneNumber, timeInMs).getAsJson());
     }
 
     private void tryToCall() throws IOException {
         //Si nunca se llamo o paso un tiempo razonable desde ultima llamada se debe llamar
         // agregar && isScreenOn()
-        if(lastCallDate == null || (new Date()).getTime() - lastCallDate.getTime() > 30000 ){
+        if(!powerManager.isScreenOn() && callsMonitor.getActualState() != TelephonyManager.CALL_STATE_OFFHOOK && (lastCallDate == null || (new Date()).getTime() - lastCallDate.getTime() > 30000 )){
             if(lastCallDate == null) {
 				Log.d(Constants.LogTag, "Llamando por primera vez");
 			}
@@ -409,5 +465,138 @@ public class DataCollectorService extends Service implements SignalChangedListen
 
     public boolean isScreenOn(PowerManager powerManager){
        return powerManager.isScreenOn();
+    }
+    
+    /**
+     * Enable mobile connection for a specific address
+     * @param context a Context (application or activity)
+     * @param address the address to enable
+     * @return true for success, else false
+     */
+    private boolean forceMobileConnectionForAddress(Context context, String address) {
+        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        String TAG_LOG = Constants.LogTag;
+        if (null == connectivityManager) {
+            Log.d(TAG_LOG, "ConnectivityManager is null, cannot try to force a mobile connection");
+            return false;
+        }
+
+        //check if mobile connection is available and connected
+        State state = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE_HIPRI).getState();
+        Log.d(TAG_LOG, "TYPE_MOBILE_HIPRI network state: " + state);
+        if (0 == state.compareTo(State.CONNECTED) || 0 == state.compareTo(State.CONNECTING)) {
+            return true;
+        }
+
+        //activate mobile connection in addition to other connection already activated
+        int resultInt = connectivityManager.startUsingNetworkFeature(ConnectivityManager.TYPE_MOBILE, "enableHIPRI");
+        Log.d(TAG_LOG, "startUsingNetworkFeature for enableHIPRI result: " + resultInt);
+
+        //-1 means errors
+        // 0 means already enabled
+        // 1 means enabled
+        // other values can be returned, because this method is vendor specific
+        if (-1 == resultInt) {
+            Log.e(TAG_LOG, "Wrong result of startUsingNetworkFeature, maybe problems");
+            return false;
+        }
+        if (0 == resultInt) {
+            Log.d(TAG_LOG, "No need to perform additional network settings");
+            return true;
+        }
+
+        //find the host name to route
+        String hostName = extractAddressFromUrl(address);
+        Log.d(TAG_LOG, "Source address: " + address);
+        Log.d(TAG_LOG, "Destination host address to route: " + hostName);
+        if (TextUtils.isEmpty(hostName)) hostName = address;
+
+        //create a route for the specified address
+        int hostAddress = lookupHost(hostName);
+        if (-1 == hostAddress) {
+            Log.e(TAG_LOG, "Wrong host address transformation, result was -1");
+            return false;
+        }
+        //wait some time needed to connection manager for waking up
+        try {
+            for (int counter=0; counter<30; counter++) {
+                State checkState = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE_HIPRI).getState();
+                if (0 == checkState.compareTo(State.CONNECTED))
+                    break;
+                Thread.sleep(1000);
+            }
+        } catch (InterruptedException e) {
+            //nothing to do
+        }
+        boolean resultBool = connectivityManager.requestRouteToHost(ConnectivityManager.TYPE_MOBILE_HIPRI, hostAddress);
+        Log.d(TAG_LOG, "requestRouteToHost result: " + resultBool);
+        if (!resultBool)
+            Log.e(TAG_LOG, "Wrong requestRouteToHost result: expected true, but was false");
+
+        return resultBool;
+    }
+    
+    /**
+     * This method extracts from address the hostname
+     * @param url eg. http://some.where.com:8080/sync
+     * @return some.where.com
+     */
+    public static String extractAddressFromUrl(String url) {
+        String urlToProcess = null;
+
+        //find protocol
+        int protocolEndIndex = url.indexOf("://");
+        if(protocolEndIndex>0) {
+            urlToProcess = url.substring(protocolEndIndex + 3);
+        } else {
+            urlToProcess = url;
+        }
+
+        // If we have port number in the address we strip everything
+        // after the port number
+        int pos = urlToProcess.indexOf(':');
+        if (pos >= 0) {
+            urlToProcess = urlToProcess.substring(0, pos);
+        }
+
+        // If we have resource location in the address then we strip
+        // everything after the '/'
+        pos = urlToProcess.indexOf('/');
+        if (pos >= 0) {
+            urlToProcess = urlToProcess.substring(0, pos);
+        }
+
+        // If we have ? in the address then we strip
+        // everything after the '?'
+        pos = urlToProcess.indexOf('?');
+        if (pos >= 0) {
+            urlToProcess = urlToProcess.substring(0, pos);
+        }
+        return urlToProcess;
+    }
+
+    /**
+     * Transform host name in int value used by {@link ConnectivityManager.requestRouteToHost}
+     * method
+     *
+     * @param hostname
+     * @return -1 if the host doesn't exists, elsewhere its translation
+     * to an integer
+     */
+    private static int lookupHost(String hostname) {
+        InetAddress inetAddress;
+        try {
+            inetAddress = InetAddress.getByName(hostname);
+        } catch (UnknownHostException e) {
+            return -1;
+        }
+        byte[] addrBytes;
+        int addr;
+        addrBytes = inetAddress.getAddress();
+        addr = ((addrBytes[3] & 0xff) << 24)
+                | ((addrBytes[2] & 0xff) << 16)
+                | ((addrBytes[1] & 0xff) << 8 )
+                |  (addrBytes[0] & 0xff);
+        return addr;
     }
 }

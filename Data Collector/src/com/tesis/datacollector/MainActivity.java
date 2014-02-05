@@ -22,12 +22,6 @@ public class MainActivity extends Activity {
         startServiceButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-            	Intent policyIntent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);  
-                policyIntent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN,  
-                            componentName);  
-                policyIntent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,  
-                            "Additional text explaining why this needs to be added.");  
-                startActivityForResult(policyIntent, 1);
                 startService(new Intent(MainActivity.this, DataCollectorService.class));
             }
         });

@@ -17,8 +17,8 @@ public class SMSData extends PerformanceData {
     private final Long timeOfSend;
     private final Long dateOfSend;
 
-    public SMSData(float currentSignal, float batteryLevel, Location location, Long timeOfSend, String destinationNumber, String operatorName, Long dateOfSend, String phoneNumber, Long downloadLatency) {
-        super("SMS", currentSignal, batteryLevel, location, operatorName, phoneNumber, downloadLatency);
+    public SMSData(float currentSignal, float batteryLevel, Location location, Long timeOfSend, String destinationNumber, String operatorName, Long dateOfSend, String phoneNumber) {
+        super("SMS", currentSignal, batteryLevel, location, operatorName, phoneNumber);
         this.timeOfSend = timeOfSend;
         this.dateOfSend = dateOfSend;
 

@@ -10,6 +10,7 @@ import android.util.Log;
 import com.tesis.commonclasses.Constants;
 import com.tesis.commonclasses.data.TimeSynchronizationData;
 
+import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.json.JSONObject;
@@ -48,7 +49,8 @@ public class TimeSynchronizer extends BroadcastReceiver {
         httpPost.setHeader("time", timeHolder.toString());
 
         HttpClient client = AndroidHttpClient.newInstance("tesis_agent");
-        client.execute(httpPost);
+        HttpResponse response = client.execute(httpPost);
+        response.getEntity().getContent().close();
     }
 
     @Override
