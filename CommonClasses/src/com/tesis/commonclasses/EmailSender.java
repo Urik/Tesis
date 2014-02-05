@@ -23,8 +23,8 @@ public class EmailSender {
 				"javax.net.ssl.SSLSocketFactory");
 		props.put("mail.smtp.auth", "true");
 		props.put("mail.smtp.port", "465");
-		props.put("mail.smtp.connectiontimeout", "5000");
-		props.put("mail.smtp.timeout", "5000");
+		props.put("mail.smtp.connectiontimeout", "15000");
+		props.put("mail.smtp.timeout", "15000");
 	 
 		Session session = Session.getInstance(props,
 		  new javax.mail.Authenticator() {
