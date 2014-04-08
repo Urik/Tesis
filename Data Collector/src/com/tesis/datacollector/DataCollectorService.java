@@ -4,11 +4,15 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpResponse;
@@ -18,6 +22,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
+import org.joda.time.DateTime;
 import org.json.JSONObject;
 
 import android.app.Activity;
@@ -54,7 +59,7 @@ import android.view.WindowManager.LayoutParams;
 import android.widget.Toast;
 
 import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.TimeSynchronizer;
+import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.data.CallMadeData;
 import com.tesis.commonclasses.data.FailedLatencyCheckData;
 import com.tesis.commonclasses.data.DataList;
@@ -77,16 +82,14 @@ public class DataCollectorService extends Service implements SignalChangedListen
     private PhoneSignalMonitor signalMonitor;
     private BatteryLevelInspector batteryInspector;
     private OutgoingCallsMonitor callsMonitor;
-    private TimeSynchronizer timeSynchronizer;
     private TrafficStats trafficMonitor;
-    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(10);
+    private final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(10);
     private PowerManager powerManager;
 
     //Datos a enviar
     private Float currentSignal;
     private Float oldSignal;
     private Location lastKnownLocation;
-    private Float batteryLevel;
     private String lastDestination;
     private String operatorName;
 
@@ -98,7 +101,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     private Runnable testLatencyStrategy;
 
     //Lista de paquetes
-    private final DataList dataList = new DataList(this);
+    private DataList dataList;
     private SharedPreferences preferences;
 
     //TS de ultima llamada
@@ -114,6 +117,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+        dataList = DataList.load(this);
         makeACallStrategy = getEmptyTask();
         testLatencyStrategy = getEmptyTask();        
         //Obtener el proveedor de telefonia
@@ -124,15 +128,9 @@ public class DataCollectorService extends Service implements SignalChangedListen
         //Inicializar Variables
         signalMonitor = new PhoneSignalMonitor(telephonyManager);
         locationRetriever = new LocationMonitor(this);
-        if (!locationRetriever.isGPSEnabled()) {
-        	Toast.makeText(this, "The GPS must be enabled", Toast.LENGTH_LONG).show();
-        	stopSelf();
-        }
         batteryInspector = new BatteryLevelInspector(this);
         callsMonitor = new OutgoingCallsMonitor(this);
         trafficMonitor = new TrafficStats();
-        timeSynchronizer = new TimeSynchronizer(this, mPhoneNumber, Constants.ServerAddress);
-        timeSynchronizer.synchronizeTime();
         currentSignal = 0f;
         powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
@@ -143,16 +141,31 @@ public class DataCollectorService extends Service implements SignalChangedListen
         contentResolver.registerContentObserver(Uri.parse("content://sms"),true, smsObserver);
         //end Registrar SMS OBSERVER
 
+        boolean synced = SynchronizedClock.synchronize();
+        if (!synced) {
+        	stopSelf();
+        }
+        
         //ADD TODOS LOS REGISTRERS
-        batteryLevel = batteryInspector.getBatteryLevelAsPercentage();
         addAndRegisterMonitor(smsObserver);
         addAndRegisterMonitor(locationRetriever);
         addAndRegisterMonitor(signalMonitor);
         addAndRegisterMonitor(callsMonitor);
     
-		boolean forceMobileConnectionForAddress = MobileDataUseForcer.forceMobileConnectionForAddress(DataCollectorService.this, Constants.LatencyTestAddress);			
+		boolean forceMobileConnectionForAddress = MobileDataUseForcer.forceMobileConnectionForAddress(DataCollectorService.this, Constants.LatencyTestAddress);
+		
+		executor.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						SynchronizedClock.synchronize();
+					} catch (Throwable e) {
+						Log.e(Constants.LogTag, "Failed to synchronize");
+					}
+				}
+			}, 0, 60, TimeUnit.SECONDS);
 
-        executor.scheduleAtFixedRate(new Runnable() {
+        executor.scheduleWithFixedDelay(new Runnable() {
 			@Override
 			public void run() {
 				try {
@@ -161,16 +174,16 @@ public class DataCollectorService extends Service implements SignalChangedListen
 					e.printStackTrace();
 				}
 			}
-		}, 0, 60, TimeUnit.SECONDS);
+		}, 0, 600, TimeUnit.SECONDS);
         
-        executor.scheduleAtFixedRate(new Runnable() {
+        executor.scheduleWithFixedDelay(new Runnable() {
 			@Override
 			public void run() {
 				testLatencyStrategy.run();
 			}
 		}, 0, 120, TimeUnit.SECONDS);
         
-        executor.scheduleAtFixedRate(getLocationTimeoutTask(), 0, 60, TimeUnit.SECONDS);
+        executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60, TimeUnit.SECONDS);
         
         Intent resultIntent = new Intent(this, MainActivity.class);
         Notification notification = new NotificationCompat.Builder(this)
@@ -210,13 +223,28 @@ public class DataCollectorService extends Service implements SignalChangedListen
     
     @Override
 	public void onDestroy() {
-    	executor.shutdown();
+    	executor.shutdownNow();
     	locationRetriever.stopListening();
     	signalMonitor.stopListening();
     	callsMonitor.stopListening();
-    	executor.shutdownNow();
-    	unregisterReceiver(timeSynchronizer);
-		super.onDestroy();
+    	ExecutorService localExecutor = Executors.newSingleThreadExecutor();
+    	Future<?> saveListFuture = localExecutor.submit(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					dataList.sendDataListAndClearIfSuccessful();
+				} catch (URISyntaxException e) {
+					Log.e(Constants.LogTag, "Failed to send data to server uppon service closing");
+				}
+		    	dataList.save();
+			}
+		});
+    	try {
+			saveListFuture.get();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+    	super.onDestroy();
 	}
 
 	private void addAndRegisterMonitor(EventsProducer producer) {
@@ -250,7 +278,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
 			
 			@Override
 			public void run() {
-				FailedLatencyCheckData failedLatencyCheckData = new FailedLatencyCheckData(currentSignal, batteryLevel, lastKnownLocation, operatorName, mPhoneNumber, 0l);
+				FailedLatencyCheckData failedLatencyCheckData = new FailedLatencyCheckData(currentSignal, batteryInspector.getBatteryLevelAsPercentage(), lastKnownLocation, operatorName, mPhoneNumber, 0l);
 				JSONObject failedLatencyCheck = failedLatencyCheckData.getAsJson();
 				dataList.addToPack(failedLatencyCheck);
 			}
@@ -336,7 +364,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
         lastCallLocation = lastKnownLocation; //registrar locacion de ultima llamada
         CallMadeData callData = null;
         try {
-            callData = new CallMadeData(currentSignal,batteryLevel, lastKnownLocation,(new Date()).getTime(),lastDestination, operatorName, mPhoneNumber);
+            callData = new CallMadeData(currentSignal,batteryInspector.getBatteryLevelAsPercentage(), lastKnownLocation, SynchronizedClock.getCurrentTime(),lastDestination, operatorName, mPhoneNumber);
             JSONObject callJson = callData.getAsJson();
             System.out.println("********* OBJETO JSON AGREGADO A LA LISTA: " + callJson.toString());
             dataList.addToPack(callJson);
@@ -369,6 +397,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
         	testLatencyStrategy = getTestLatencyTask();
         	Location previousLocation = lastKnownLocation;
 	        this.lastKnownLocation = location;
+	        timeOfLastKnownLocation = new Date();
 	        
 	        //Si la nueva loacacion difiere de la ultima en la que se llamo X metros, se deben generar datos
 	        if (previousLocation == null || lastCallLocation == null || lastCallLocation != null && lastCallLocation.distanceTo(lastKnownLocation) >= 15f) {
@@ -388,10 +417,10 @@ public class DataCollectorService extends Service implements SignalChangedListen
     }
 
     @Override
-    public void handleSMSSent(long timeInMs, Date initDate, Date finishDate) {
+    public void handleSMSSent(long timeInMs, Date initDate, Date finishDate, String destinationNumber) {
         SMSData messageData = null;
         try {
-            messageData = new SMSData(currentSignal,batteryLevel, lastKnownLocation,timeInMs,lastDestination, operatorName, initDate.getTime(), mPhoneNumber);
+            messageData = new SMSData(currentSignal,batteryInspector.getBatteryLevelAsPercentage(), lastKnownLocation,timeInMs, operatorName, SynchronizedClock.getCurrentTime(), mPhoneNumber, destinationNumber);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -431,7 +460,6 @@ public class DataCollectorService extends Service implements SignalChangedListen
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         if (key.equals(SettingsActivity.PHONE_NUMBER)) {
             mPhoneNumber = sharedPreferences.getString(SettingsActivity.PHONE_NUMBER, "");
-            timeSynchronizer.setPhoneNumber(mPhoneNumber);
         }
     }
 
@@ -439,7 +467,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     public void testLatency() throws InterruptedException, ExecutionException {
         AsyncTask<Void, Void, Long> latencyCheckTask = new LatencyChecker(getHandleLatencyErrorsTask()).execute();
         Long timeInMs = latencyCheckTask.get();
-        dataList.addToPack(new InternetCheckData(currentSignal, batteryLevel, lastKnownLocation, operatorName, mPhoneNumber, timeInMs).getAsJson());
+        dataList.addToPack(new InternetCheckData(currentSignal, batteryInspector.getBatteryLevelAsPercentage(), lastKnownLocation, operatorName, mPhoneNumber, timeInMs).getAsJson());
     }
 
     private void tryToCall() throws IOException {
@@ -469,7 +497,7 @@ public class DataCollectorService extends Service implements SignalChangedListen
     	return new Runnable() {
 			@Override
 			public void run() {
-				if (timeOfLastKnownLocation != null && new Date().getTime() - timeOfLastKnownLocation.getTime() > 5000 * 60) { //Si pasaron mas de 5 minutos desde el ultimo locaitonUpdate
+				if (timeOfLastKnownLocation != null && (new Date().getTime() - timeOfLastKnownLocation.getTime() > 5000 * 60)) { //Si pasaron mas de 5 minutos desde el ultimo locaitonUpdate
 					testLatencyStrategy = getEmptyTask();
 					makeACallStrategy = getEmptyTask();
 				}

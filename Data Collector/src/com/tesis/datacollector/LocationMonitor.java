@@ -80,9 +80,9 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
             }
         };
         
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
         if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
 //	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-	        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
 //	        locationManager.addGpsStatusListener(gpsStatusListener);
         }
     }

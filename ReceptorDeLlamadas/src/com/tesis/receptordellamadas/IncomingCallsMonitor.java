@@ -5,11 +5,14 @@ import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 
 import com.tesis.receptordellamadas.listeners.CallReceivedListener;
+import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.listeners.EventsProducer;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+
+import org.joda.time.DateTime;
 
 public class IncomingCallsMonitor extends PhoneStateListener implements EventsProducer<CallReceivedListener>{
     private List<CallReceivedListener> listeners = new ArrayList<CallReceivedListener>();
@@ -42,11 +45,11 @@ public class IncomingCallsMonitor extends PhoneStateListener implements EventsPr
     @Override
     public void onCallStateChanged(int state, String incomingNumber) {
         if(state == TelephonyManager.CALL_STATE_RINGING) {
-            handleCallReceived(incomingNumber, new Date());
+            handleCallReceived(incomingNumber, SynchronizedClock.getCurrentTime());
         }
     }
 
-    private void handleCallReceived(String incomingNumber, Date date) {
+    private void handleCallReceived(String incomingNumber, DateTime date) {
         for (CallReceivedListener listener : listeners) {
             listener.handleCallHasBeenReceived(incomingNumber, date);
         }

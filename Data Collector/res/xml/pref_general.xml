@@ -1,6 +1,6 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <EditTextPreference
-        android:key="my_phone_number_preference"
+        android:key="phone_number_preference"
         android:title="My phone number"
         android:defaultValue=""/>
     <EditTextPreference

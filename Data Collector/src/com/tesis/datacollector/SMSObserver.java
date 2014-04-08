@@ -56,13 +56,13 @@ public class SMSObserver extends ContentObserver implements EventsProducer<SMSSe
                     Toast.makeText(context, "Enviando: " + content + " " + type, Toast.LENGTH_LONG).show();
                     times++;
                 }else if(times == 2 && type == MESSAGE_TYPE_SENT){
-                    String destinationNumber = cur.getString(cur.getColumnIndex("_id"));
+                    String destinationNumber = cur.getString(cur.getColumnIndex("address"));
                     this.finishDate = new Date();
                     this.timeToEstablish = (finishDate.getTime() - initDate.getTime());
                     content = "Enviado: " + content + " Tiempo de envio: " + timeToEstablish + " ms" + " " + type;
                     Toast.makeText(context, content, Toast.LENGTH_LONG).show();
                     times = 0;
-                    handleSmsSent(timeToEstablish, initDate, finishDate);
+                    handleSmsSent(timeToEstablish, initDate, finishDate, destinationNumber);
                 }
         }
     }
@@ -71,9 +71,9 @@ public class SMSObserver extends ContentObserver implements EventsProducer<SMSSe
         return type == MESSAGE_TYPE_SENT || type == MESSAGE_TYPE_SENDING || type == MESSAGE_TYPE_QUEUED;
     }
 
-    private void handleSmsSent(long timeToEstablishInMs, Date initDate, Date finishDate) {
+    private void handleSmsSent(long timeToEstablishInMs, Date initDate, Date finishDate, String destinationNumber) {
         for (SMSSentListener listener : listeners) {
-            listener.handleSMSSent(timeToEstablishInMs, initDate, finishDate);
+            listener.handleSMSSent(timeToEstablishInMs, initDate, finishDate, destinationNumber);
         }
     }
 

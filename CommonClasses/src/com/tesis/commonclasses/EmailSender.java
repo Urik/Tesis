@@ -13,8 +13,8 @@ import javax.mail.internet.MimeMessage;
 
 public class EmailSender {
 	public static void sendEmail(String content) throws MessagingException {
-		final String username = "uriberman@gmail.com";
-		final String password = "&mamapapa88";
+		final String username = "email";
+		final String password = "pass";
 	 
 		Properties props = new Properties();
 		props.put("mail.smtp.host", "smtp.gmail.com");
@@ -35,9 +35,9 @@ public class EmailSender {
  
  
 		Message message = new MimeMessage(session);
-		message.setFrom(new InternetAddress("uriberman@gmail.com"));
+		message.setFrom(new InternetAddress(username));
 		message.setRecipients(Message.RecipientType.TO,
-		InternetAddress.parse("uriberman@gmail.com"));
+				InternetAddress.parse("uriberman@gmail.com"));
 		message.setSubject("Tesis_Data");
 		message.setText(content);
 	 

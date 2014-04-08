@@ -4,14 +4,20 @@ import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.joda.time.DateTime;
 import org.json.JSONObject;
 
 import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.TimeSynchronizer;
+import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.data.CallReceivedData;
 import com.tesis.commonclasses.data.DataList;
 import com.tesis.commonclasses.listeners.SignalChangedListener;
@@ -23,7 +29,10 @@ import com.tesis.receptordellamadas.listeners.CallReceivedListener;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.net.wifi.WifiManager;
+import android.net.wifi.WifiManager.WifiLock;
 import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
 import android.telephony.TelephonyManager;
@@ -36,15 +45,19 @@ public class CallsBlockerService extends Service implements CallReceivedListener
     private float currentSignal;
     private String operatorName;
     private String mPhoneNumber;
-    private TimeSynchronizer timeSynchronizer;
-    private ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();    
+    private ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(2);    
     private TelephonyManager telephonyManager;
 
     //Lista de paquetes
-    DataList dataList = new DataList(this);
+    private DataList dataList;
+	private WifiLock wifiLock;
 	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
+	    dataList = DataList.load(this);
+		WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
+	    wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL , "MyWifiLock");
+	    wifiLock.acquire();
 		
 		Intent resultIntent = new Intent(this, MainActivity.class);
         Notification notification = new NotificationCompat.Builder(this)
@@ -55,21 +68,29 @@ public class CallsBlockerService extends Service implements CallReceivedListener
         	.build();
         startForeground(1, notification);
         
+        boolean sync = SynchronizedClock.synchronize();
+        if (!sync) {
+        	stopSelf();
+        }
+        
+        ScheduledFuture<?> synchronizerFuture = executor.scheduleAtFixedRate(new Runnable() {
+			@Override
+			public void run() {
+				SynchronizedClock.synchronize();
+			}
+		}, 0, 60, TimeUnit.SECONDS);
 		this.telephonyManager = (TelephonyManager) this.getSystemService(TELEPHONY_SERVICE);
         this.incomingCallsMonitor = new IncomingCallsMonitor(telephonyManager);
         signalMonitor = new PhoneSignalMonitor(telephonyManager);
         this.operatorName = telephonyManager.getNetworkOperatorName();
         this.mPhoneNumber = telephonyManager.getLine1Number();
 
-        timeSynchronizer = new TimeSynchronizer(this, mPhoneNumber, Constants.ServerAddress);
-        timeSynchronizer.synchronizeTime();
-
         signalMonitor.addListener(this);
         signalMonitor.startListening();
 
         incomingCallsMonitor.addListener(this);
         incomingCallsMonitor.startListening();
-        executor.scheduleWithFixedDelay(getSendToServerTask(), 0, 120, TimeUnit.SECONDS); //30 minutes
+        executor.scheduleWithFixedDelay(getSendToServerTask(), 0, 600, TimeUnit.SECONDS); //10 minutes
 		return START_STICKY;
 	}
 	
@@ -78,6 +99,26 @@ public class CallsBlockerService extends Service implements CallReceivedListener
 		incomingCallsMonitor.stopListening();
 		signalMonitor.stopListening();
 		executor.shutdownNow();
+		if (wifiLock != null) {
+			wifiLock.release();
+		}
+		ExecutorService localExecutor = Executors.newSingleThreadExecutor();
+		Future<?> executionFuture = localExecutor.submit(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					dataList.sendDataListAndClearIfSuccessful();
+				} catch (URISyntaxException e) {
+					e.printStackTrace();
+				}
+				dataList.save();
+			}
+		});
+		try {
+			executionFuture.get();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		super.onDestroy();
 	}
 
@@ -86,7 +127,7 @@ public class CallsBlockerService extends Service implements CallReceivedListener
 		return null;
 	}
 	@Override
-    public void handleCallHasBeenReceived(String incomingNumber, Date time) {
+    public void handleCallHasBeenReceived(String incomingNumber, DateTime time) {
     	try {
             // Java reflection to gain access to TelephonyManager's
             // ITelephony getter

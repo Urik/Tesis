@@ -13,11 +13,11 @@ import com.tesis.commonclasses.Constants;
 import com.tesis.commonclasses.obtainers.BatteryLevelInspector;
 import com.tesis.commonclasses.obtainers.PhoneSignalMonitor;
 import com.tesis.commonclasses.obtainers.SignalChangedArgs;
-import com.tesis.commonclasses.TimeSynchronizer;
 import com.tesis.commonclasses.data.CallReceivedData;
 import com.tesis.commonclasses.data.DataList;
 import com.tesis.commonclasses.listeners.SignalChangedListener;
 
+import org.joda.time.DateTime;
 import org.json.JSONObject;
 
 import java.net.URISyntaxException;
@@ -69,7 +69,7 @@ public class ReceiverActivity extends Activity implements CallReceivedListener,S
 //    }
 //
     @Override
-    public void handleCallHasBeenReceived(String incomingNumber, Date time) {
+    public void handleCallHasBeenReceived(String incomingNumber, DateTime time) {
 //        BatteryLevelInspector batteryInspector = new BatteryLevelInspector(this);
 //        float batteryLevel = batteryInspector.getBatteryLevelAsPercentage();
 //

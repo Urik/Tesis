@@ -3,33 +3,11 @@ package com.tesis.receptordellamadas;
 import android.os.Bundle;
 import android.app.Activity;
 import android.content.Intent;
-import android.telephony.TelephonyManager;
-import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
 
 import com.tesis.receptordellamadas.R;
-import com.tesis.receptordellamadas.R.layout;
-import com.tesis.receptordellamadas.listeners.CallReceivedListener;
-import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.obtainers.BatteryLevelInspector;
-import com.tesis.commonclasses.obtainers.PhoneSignalMonitor;
-import com.tesis.commonclasses.obtainers.SignalChangedArgs;
-import com.tesis.commonclasses.TimeSynchronizer;
-import com.tesis.commonclasses.data.CallReceivedData;
-import com.tesis.commonclasses.data.DataList;
-import com.tesis.commonclasses.listeners.SignalChangedListener;
-
-import org.json.JSONObject;
-
-import java.io.Console;
-import java.lang.reflect.Method;
-import java.net.URISyntaxException;
-import java.util.Date;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
 

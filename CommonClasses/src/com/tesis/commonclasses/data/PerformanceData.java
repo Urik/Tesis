@@ -10,7 +10,6 @@ public abstract class PerformanceData extends Data {
     private Double locationLon;
     private Float batteryLevel;
     private String operatorName;
-    private String phoneNumber;
 
     protected PerformanceData(String typeOfData, Float currentSignal, Float batteryLevel, Location location, String operatorName, String phoneNumber) {
         super(typeOfData, phoneNumber);
@@ -25,7 +24,6 @@ public abstract class PerformanceData extends Data {
             this.locationLon = 0d;
         }
         this.operatorName = operatorName;
-        this.phoneNumber = phoneNumber;
     }
 
     @Override
@@ -37,7 +35,6 @@ public abstract class PerformanceData extends Data {
             jsonObject.put("locationLon", locationLon);
             jsonObject.put("batteryLevel", batteryLevel);
             jsonObject.put("operatorName", operatorName);
-            jsonObject.put("phoneNumber", phoneNumber);
 
             return jsonObject;
         } catch (Exception e) {

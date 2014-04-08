@@ -8,18 +8,19 @@ import com.tesis.commonclasses.Constants;
 import android.util.Log;
 
 public class CallReceivedData extends PerformanceData {
-	private String sourceNumber;
+	private String callerNumber;
 	
-	public CallReceivedData(Float currentSignal, Float batteryLevel, String operatorName, String phoneNumber, String sourceNumber) {
-		super("call_received", currentSignal, batteryLevel, null, operatorName, phoneNumber);
-		this.sourceNumber = sourceNumber;
+	public CallReceivedData(Float currentSignal, Float batteryLevel, String operatorName, String phoneNumber, String callerNumber) {
+		super("call", currentSignal, batteryLevel, null, operatorName, phoneNumber);
+		this.callerNumber = callerNumber;
 	}
 
 	@Override
 	public JSONObject getAsJson() {
 		JSONObject json = super.getAsJson();
 		try {
-			json.put("sourceNumber", sourceNumber);
+			json.put("targetNumber", callerNumber);
+			json.put("incoming", 1);
 		} catch (JSONException e) {
 			Log.e(Constants.LogTag, "Error creating a call_received object: " + e);
 			e.printStackTrace();
