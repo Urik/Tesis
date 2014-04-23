@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename method &apos;com.tesis.datacollector.DataCollectorService.getExecutionSendingTask()&apos; to &apos;getMakeACallTask&apos;&#x0D;&#x0A;- Original project: &apos;Data Collector&apos;&#x0D;&#x0A;- Original element: &apos;com.tesis.datacollector.DataCollectorService.getExecutionSendingTask()&apos;&#x0D;&#x0A;- Renamed element: &apos;com.tesis.datacollector.DataCollectorService.getMakeACallTask()&apos;&#x0D;&#x0A;- Update references to refactored element" delegate="false" deprecate="false" description="Rename method &apos;getExecutionSendingTask&apos;" flags="589830" id="org.eclipse.jdt.ui.rename.method" input="/src&lt;com.tesis.datacollector{DataCollectorService.java[DataCollectorService~getExecutionSendingTask" name="getMakeACallTask" references="true" stamp="1390185069492" version="1.0"/>
+</session>

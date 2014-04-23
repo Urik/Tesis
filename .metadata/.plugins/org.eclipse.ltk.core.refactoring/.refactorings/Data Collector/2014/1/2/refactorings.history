@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Convert local variable &apos;com.tesis.datacollector.LocationMonitor.startListening().locationManager&apos; in &apos;com.tesis.datacollector.LocationMonitor.startListening()&apos; to field&#x0D;&#x0A;- Original project: &apos;Data Collector&apos;&#x0D;&#x0A;- Original element: &apos;com.tesis.datacollector.LocationMonitor.startListening().locationManager&apos;&#x0D;&#x0A;- Field name: &apos;locationManager&apos;&#x0D;&#x0A;- Initialize field in method&#x0D;&#x0A;- Declared visibility: &apos;private&apos;" description="Convert local variable &apos;locationManager&apos; to field" final="false" flags="2" id="org.eclipse.jdt.ui.promote.temp" initialize="1" input="/src&lt;com.tesis.datacollector{LocationMonitor.java" name="locationManager" selection="2868 0" stamp="1389570084449" static="false" version="1.0" visibility="2"/>
+</session>

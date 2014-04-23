@@ -1,0 +1,7 @@
+1392178284006	Extract method 'addDataToDispatchList'
+1392179140503	Rename field 'serializationFilename'
+1392179260987	Encapsulate field 'dataForDispatching'
+1392180101930	Rename local variable 'string'
+1392180120945	Rename local variable 'jsonIzedData'
+1392180420966	Rename local variable 'auxArray'
+1392180435517	Rename local variable 'arrayList'

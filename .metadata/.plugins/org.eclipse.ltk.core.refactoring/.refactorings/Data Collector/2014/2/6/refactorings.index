@@ -1,0 +1,4 @@
+1391546046151	Rename field 'synchronizer'
+1391549152288	Encapsulate field 'actualState'
+1391563676351	Extract method 'getTestLatencyTask'
+1391563729138	Rename method 'getPositionUnknownMakeACallTask'

@@ -1,0 +1,11 @@
+1391550012993	Delete element
+1391554558484	Rename local variable 'auxData'
+1391634021486	Rename local variable 'prueba'
+1391634141811	Rename local variable 'requestTime'
+1391634558377	Delete element
+1391635987606	Extract method 'synchronize'
+1391637506413	Rename field 'lastSyncOffset'
+1391638840317	Extract local variable 'currentTime'
+1391888205532	Rename local variable 'serverTimeHasBeenFonund'
+1391888236819	Rename local variable 'timeObtained'
+1391890016210	Rename local variable 'i'

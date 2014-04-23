@@ -1,0 +1,5 @@
+1388372741845	Rename field 'lastLocation'
+1388373003594	Extract method 'getLocationAcquisitionTimeoutRunnable'
+1388373152490	Extract method 'handleGPSAcquisitionTimeout'
+1388375435430	Rename field 'listeners'
+1388375452855	Delete element
