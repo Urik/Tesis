@@ -6,7 +6,7 @@
     <EditTextPreference
         android:key="destination_phone_number_preference"
         android:title="Destination phone number"
-        android:defaultValue="123456789" />
+        android:defaultValue="2233036317" />
     <EditTextPreference
         android:key="gap_between_calls_preference"
         android:title="Time gap between calls"

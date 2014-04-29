@@ -6,6 +6,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.tesis.datacollector.listeners.CallEndedListener;
 import com.tesis.datacollector.listeners.CallIsInProgressListener;
 import com.tesis.commonclasses.listeners.EventsProducer;
 import com.tesis.datacollector.listeners.PhoneIsMakingACallListener;
@@ -23,13 +24,15 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
     private PhoneState previousState;
     private OutgoingCallsMonitorHelper outgoingCallsMonitor;
 
-    private Collection<CallIsInProgressListener> listeners;
+    private Collection<CallIsInProgressListener> callInProgressListeners;
+    private Collection<CallEndedListener> callEndedListeners;
     private int actualState;
 
     public OutgoingCallsMonitor(Context context){
         super();
         this.context = context;
-        listeners = new HashSet<CallIsInProgressListener>();
+        callInProgressListeners = new HashSet<CallIsInProgressListener>();
+        callEndedListeners = new HashSet<CallEndedListener>();
         outgoingCallsMonitor = new OutgoingCallsMonitorHelper(context);
         outgoingCallsMonitor.addListener(this);
     }
@@ -44,6 +47,7 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
                     this.finishDate = new Date();
                     Log.d("tesis", "Finalizando llamada a las: " + finishDate.getTime());
                     this.timeToEstablish = (finishDate.getTime() - initDate.getTime());
+                    fireCallEndedEvent(finishDate, lastCalledNumber);
                 }
 
                 previousState = PhoneState.Idle;
@@ -51,33 +55,41 @@ public class OutgoingCallsMonitor extends PhoneStateListener implements EventsPr
             case TelephonyManager.CALL_STATE_OFFHOOK:
                 previousState = PhoneState.OffHook;
                 this.initDate = new Date();
-                fireEvent(initDate, lastCalledNumber);
+                fireCallInProgressEvent(initDate, lastCalledNumber);
                 Log.d("tesis", "Comenzando llamada a las: " + initDate.getTime());
-                Toast.makeText(context, "Phone state off hook", Toast.LENGTH_LONG).show();
                 break;
             case TelephonyManager.CALL_STATE_RINGING:
                 previousState = PhoneState.Ringing;
-                Toast.makeText(context, "Phone state Ringing", Toast.LENGTH_LONG).show();
                 break;
             default:
                 break;
         }
     }
 
-    private void fireEvent(Date initDate, String lastCalledNumber) {
-        for (CallIsInProgressListener listener : listeners) {
+    private void fireCallEndedEvent(Date date, String destionationNumber) {
+    	for (CallEndedListener listener : callEndedListeners) {
+    		listener.handleCallEnded(date, destionationNumber);
+    	}
+	}
+
+	private void fireCallInProgressEvent(Date initDate, String lastCalledNumber) {
+        for (CallIsInProgressListener listener : callInProgressListeners) {
             listener.handleCallIsInProgress(initDate, lastCalledNumber);
         }
     }
 
     @Override
     public void addListener(CallIsInProgressListener listener) {
-        listeners.add(listener);
+        callInProgressListeners.add(listener);
+    }
+    
+    public void addListener(CallEndedListener listener) {
+        callEndedListeners.add(listener);
     }
 
     @Override
     public boolean removeListener(CallIsInProgressListener listener) {
-        return listeners.remove(listener);
+        return callInProgressListeners.remove(listener);
     }
 
     @Override

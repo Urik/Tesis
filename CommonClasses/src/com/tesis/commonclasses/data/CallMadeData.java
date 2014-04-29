@@ -15,12 +15,17 @@ import java.util.Date;
 public class CallMadeData extends PerformanceData {
 
     private final DateTime timeOfCall;
+    private DateTime timeOfFinalization = null;
     private final String destinationNumber;
 
     public CallMadeData(float currentSignal, float batteryLevel, Location location, DateTime timeOfCall, String destinationNumber, String operatorName, String phoneNumber) {
         super("call", currentSignal, batteryLevel, location, operatorName, phoneNumber);
         this.timeOfCall = timeOfCall;
         this.destinationNumber = destinationNumber;
+    }
+    
+    public void setTimeOfFinalization(DateTime time) {
+    	this.timeOfFinalization = time;
     }
 
     @Override
@@ -29,6 +34,9 @@ public class CallMadeData extends PerformanceData {
             JSONObject jsonObject = super.getAsJson();
             jsonObject.put("targetNumber", destinationNumber);
             jsonObject.put("incoming", 0);
+            if (timeOfFinalization != null) {
+            	jsonObject.put("timeOfFinalization", timeOfFinalization.toString(TesisTimeFormatter.getFormatter()));
+            }
             return jsonObject;
         } catch (JSONException e) {
             return new JSONObject();

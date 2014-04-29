@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <qualifiedTypeNameHistroy>
-<fullyQualifiedTypeName name="com.tesis.receptordellamadas.R.id"/>
-<fullyQualifiedTypeName name="android.view.View.OnClickListener"/>
 <fullyQualifiedTypeName name="com.tesis.receptordellamadas.MainActivity"/>
 <fullyQualifiedTypeName name="com.tesis.commonclasses.data.PerformanceData"/>
 <fullyQualifiedTypeName name="com.tesis.datacollector.LatencyChecker"/>
@@ -48,7 +46,6 @@
 <fullyQualifiedTypeName name="java.lang.Runnable"/>
 <fullyQualifiedTypeName name="com.tesis.receptordellamadas.CallsBlockerService"/>
 <fullyQualifiedTypeName name="java.util.ArrayList"/>
-<fullyQualifiedTypeName name="java.util.Date"/>
 <fullyQualifiedTypeName name="org.joda.time.format.DateTimeFormat"/>
 <fullyQualifiedTypeName name="org.joda.time.format.DateTimeFormatter"/>
 <fullyQualifiedTypeName name="android.util.TimeFormatException"/>
@@ -60,4 +57,7 @@
 <fullyQualifiedTypeName name="org.apache.http.HttpEntity"/>
 <fullyQualifiedTypeName name="com.tesis.datacollector.DataCollectorService"/>
 <fullyQualifiedTypeName name="java.util.concurrent.ScheduledThreadPoolExecutor"/>
+<fullyQualifiedTypeName name="java.util.Date"/>
+<fullyQualifiedTypeName name="java.util.HashSet"/>
+<fullyQualifiedTypeName name="com.tesis.datacollector.listeners.CallEndedListener"/>
 </qualifiedTypeNameHistroy>
