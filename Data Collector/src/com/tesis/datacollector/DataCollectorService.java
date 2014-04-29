@@ -89,8 +89,7 @@ public class DataCollectorService extends Service implements
 	private BatteryLevelInspector batteryInspector;
 	private OutgoingCallsMonitor callsMonitor;
 	private TrafficStats trafficMonitor;
-	private final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(
-			10);
+	private final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(10);
 	private PowerManager powerManager;
 
 	// Datos a enviar
@@ -128,8 +127,7 @@ public class DataCollectorService extends Service implements
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 		dataList = DataList.load(this);
-		//makeACallStrategy = getEmptyTask();
-		makeACallStrategy = getPositionAqcuiredMakeACallTask();
+		makeACallStrategy = getEmptyTask();
 		testLatencyStrategy = getEmptyTask();
 		// Obtener el proveedor de telefonia
 		operatorName = telephonyManager.getNetworkOperatorName();
@@ -383,7 +381,6 @@ public class DataCollectorService extends Service implements
 			futureCall.cancel(true);
 		// Programar proxima llamada
 		futureCall = executor.schedule(makeACallStrategy, 60, TimeUnit.SECONDS);
-		System.out.println("*********Resetear Timeout");
 
 		DeleteCallLogByNumber(destinationNumber);
 		try {
@@ -451,7 +448,7 @@ public class DataCollectorService extends Service implements
 			if (previousLocation == null || lastCallLocation == null
 					|| lastCallLocation != null
 					&& lastCallLocation.distanceTo(lastKnownLocation) >= 15f) {
-				Log.d(Constants.LogTag, "Cambio Locacion");
+				Log.d(Constants.LogTag, "Cambio ubicacion");
 				makeACallStrategy.run();
 			}
 		} else {
