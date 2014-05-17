@@ -83,7 +83,7 @@ public class CallsBlockerService extends Service implements CallReceivedListener
         this.incomingCallsMonitor = new IncomingCallsMonitor(telephonyManager);
         signalMonitor = new PhoneSignalMonitor(telephonyManager);
         this.operatorName = telephonyManager.getNetworkOperatorName();
-        this.mPhoneNumber = telephonyManager.getLine1Number();
+        this.mPhoneNumber = "2233036317";
 
         signalMonitor.addListener(this);
         signalMonitor.startListening();

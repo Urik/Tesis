@@ -1,5 +1,11 @@
 package com.tesis.datacollector;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import android.content.Context;
 import android.content.Intent;
 import android.location.Location;
@@ -7,19 +13,11 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.provider.Settings;
 
 import com.tesis.commonclasses.listeners.EventsProducer;
 import com.tesis.datacollector.listeners.GPSSignalLostListener;
 import com.tesis.datacollector.listeners.LocationChangedListener;
-
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class LocationMonitor implements EventsProducer<LocationChangedListener>, GPSSignalLostListener {
     private final Context context;
@@ -76,7 +74,7 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
             public void onProviderEnabled(String provider) {}
 
             public void onProviderDisabled(String provider) {
-                turnGPSOn();
+                //turnGPSOn();
             }
         };
         

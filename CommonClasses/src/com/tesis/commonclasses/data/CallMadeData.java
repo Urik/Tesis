@@ -7,6 +7,7 @@ import com.tesis.commonclasses.TesisTimeFormatter;
 import com.tesis.commonclasses.data.PerformanceData;
 
 import org.joda.time.DateTime;
+import org.joda.time.Seconds;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -35,7 +36,8 @@ public class CallMadeData extends PerformanceData {
             jsonObject.put("targetNumber", destinationNumber);
             jsonObject.put("incoming", 0);
             if (timeOfFinalization != null) {
-            	jsonObject.put("timeOfFinalization", timeOfFinalization.toString(TesisTimeFormatter.getFormatter()));
+            	long duration = timeOfFinalization.getMillis() - timeOfCall.getMillis();
+            	jsonObject.put("callTime", duration);
             }
             return jsonObject;
         } catch (JSONException e) {

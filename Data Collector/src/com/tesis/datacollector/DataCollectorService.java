@@ -44,6 +44,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
@@ -60,6 +61,7 @@ import android.widget.Toast;
 
 import com.antonc.phone_schedule.Dummy.DummyBrightnessActivity;
 import com.tesis.commonclasses.Constants;
+import com.tesis.commonclasses.MockTimeSynchronizer;
 import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.data.CallMadeData;
 import com.tesis.commonclasses.data.FailedLatencyCheckData;
@@ -125,92 +127,128 @@ public class DataCollectorService extends Service implements
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
-		TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-		dataList = DataList.load(this);
-		makeACallStrategy = getEmptyTask();
-		testLatencyStrategy = getEmptyTask();
-		// Obtener el proveedor de telefonia
-		operatorName = telephonyManager.getNetworkOperatorName();
+		final Context ctx = this;
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				//Handler is used to run code on the main UI thread.
+				final Handler handler = new Handler(Looper.getMainLooper());
+				final TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+				dataList = DataList.load(ctx);
+				makeACallStrategy = getEmptyTask();
+				testLatencyStrategy = getEmptyTask();
+				// Obtener el proveedor de telefonia
+				operatorName = telephonyManager.getNetworkOperatorName();
 
-		setPhoneNumbers(telephonyManager);
+				setPhoneNumbers(telephonyManager);
 
-		// Inicializar Variables
-		signalMonitor = new PhoneSignalMonitor(telephonyManager);
-		locationRetriever = new LocationMonitor(this);
-		batteryInspector = new BatteryLevelInspector(this);
-		callsMonitor = new OutgoingCallsMonitor(this);
-		trafficMonitor = new TrafficStats();
-		currentSignal = 0f;
-		powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-		devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+				handler.post(new Runnable() {
+					@Override
+					public void run() {
+						// Inicializar Variables
+						signalMonitor = new PhoneSignalMonitor(telephonyManager);
+						locationRetriever = new LocationMonitor(ctx);
+						batteryInspector = new BatteryLevelInspector(ctx);
+						callsMonitor = new OutgoingCallsMonitor(ctx);
+						trafficMonitor = new TrafficStats();
+						currentSignal = 0f;
+						powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+						devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
 
-		// / Registra el observer para los SMS
-		SMSObserver smsObserver = new SMSObserver(new Handler(), this);
-		ContentResolver contentResolver = this.getContentResolver();
-		contentResolver.registerContentObserver(Uri.parse("content://sms"),
-				true, smsObserver);
-		// end Registrar SMS OBSERVER
+						// / Registra el observer para los SMS
+						final SMSObserver smsObserver = new SMSObserver(new Handler(), ctx);
+						ContentResolver contentResolver = ctx.getContentResolver();
+						contentResolver.registerContentObserver(Uri.parse("content://sms"),
+								true, smsObserver);
+						// end Registrar SMS OBSERVER
+						
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								boolean synced = SynchronizedClock.synchronize();
+								if (!synced) {
+									stopSelf();
+								}
+								Log.d(Constants.LogTag, "Clock successfully synchronized");
+								handler.post(new Runnable() {
+									@Override
+									public void run() {
+										// ADD TODOS LOS REGISTRERS
+										addAndRegisterMonitor(smsObserver);
+										addAndRegisterMonitor(locationRetriever);
+										addAndRegisterMonitor(signalMonitor);
+										addAndRegisterMonitor(callsMonitor);
 
-		boolean synced = SynchronizedClock.synchronize();
-		if (!synced) {
-			stopSelf();
-		}
+										callsMonitor.addListener((CallEndedListener)ctx);
+										executor.execute(new Runnable() {
+											@Override
+											public void run() {
+												Log.d(Constants.LogTag, "Setting network tests configuration");
+												boolean forceMobileConnectionForAddress = MobileDataUseForcer
+														.forceMobileConnectionForAddress(ctx,
+																Constants.LatencyTestAddress);
 
-		// ADD TODOS LOS REGISTRERS
-		addAndRegisterMonitor(smsObserver);
-		addAndRegisterMonitor(locationRetriever);
-		addAndRegisterMonitor(signalMonitor);
-		addAndRegisterMonitor(callsMonitor);
+												Log.d(Constants.LogTag, "Scheduling tasks");
+												executor.scheduleAtFixedRate(new Runnable() {
+													@Override
+													public void run() {
+														try {
+															SynchronizedClock.synchronize();
+														} catch (Throwable e) {
+															Log.e(Constants.LogTag, "Failed to synchronize");
+														}
+													}
+												}, 0, 60, TimeUnit.SECONDS);
 
-		callsMonitor.addListener((CallEndedListener)this);
+												executor.scheduleWithFixedDelay(new Runnable() {
+													@Override
+													public void run() {
+														try {
+															dataList.sendDataListAndClearIfSuccessful();
+														} catch (Throwable e) {
+															e.printStackTrace();
+														}
+													}
+												}, 0, 600, TimeUnit.SECONDS);
+
+												if (forceMobileConnectionForAddress) {
+													executor.scheduleWithFixedDelay(new Runnable() {
+														@Override
+														public void run() {
+															testLatencyStrategy.run();
+														}
+													}, 0, 120, TimeUnit.SECONDS);
+												}
+
+												executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
+														TimeUnit.SECONDS);
+												
+												handler.post(new Runnable() {
+													@Override
+													public void run() {
+														Intent resultIntent = new Intent(DataCollectorService.this, MainActivity.class);
+														Notification notification = new NotificationCompat.Builder(DataCollectorService.this)
+																.setSmallIcon(R.drawable.ic_stat_dc)
+																.setContentTitle("DataCollector")
+																.setContentText("Tesis Data Collector is working")
+																.setContentIntent(
+																		PendingIntent.getActivity(DataCollectorService.this, 1, resultIntent,
+																				PendingIntent.FLAG_UPDATE_CURRENT)).build();
+
+														startForeground(1, notification);
+													}
+												});
+											}
+										});
+									}
+								});
+							}
+						});
+					}
+				});
+			}
+		});
 		
-		boolean forceMobileConnectionForAddress = MobileDataUseForcer
-				.forceMobileConnectionForAddress(DataCollectorService.this,
-						Constants.LatencyTestAddress);
-
-		executor.scheduleAtFixedRate(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					SynchronizedClock.synchronize();
-				} catch (Throwable e) {
-					Log.e(Constants.LogTag, "Failed to synchronize");
-				}
-			}
-		}, 0, 60, TimeUnit.SECONDS);
-
-		executor.scheduleWithFixedDelay(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					dataList.sendDataListAndClearIfSuccessful();
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}
-			}
-		}, 0, 600, TimeUnit.SECONDS);
-
-		executor.scheduleWithFixedDelay(new Runnable() {
-			@Override
-			public void run() {
-				testLatencyStrategy.run();
-			}
-		}, 0, 120, TimeUnit.SECONDS);
-
-		executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
-				TimeUnit.SECONDS);
-
-		Intent resultIntent = new Intent(this, MainActivity.class);
-		Notification notification = new NotificationCompat.Builder(this)
-				.setSmallIcon(R.drawable.ic_stat_dc)
-				.setContentTitle("DataCollector")
-				.setContentText("Tesis Data Collector is working")
-				.setContentIntent(
-						PendingIntent.getActivity(this, 1, resultIntent,
-								PendingIntent.FLAG_UPDATE_CURRENT)).build();
-
-		startForeground(1, notification);
-
 		return START_STICKY;
 	}
 
@@ -256,14 +294,15 @@ public class DataCollectorService extends Service implements
 							"Failed to send data to server uppon service closing");
 				}
 				dataList.save();
+				Handler handler = new Handler(Looper.getMainLooper());
+				handler.post(new Runnable() {
+					@Override
+					public void run() {
+						DataCollectorService.super.onDestroy();					
+					}
+				});
 			}
 		});
-		try {
-			saveListFuture.get();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		super.onDestroy();
 	}
 
 	private void addAndRegisterMonitor(EventsProducer producer) {
@@ -359,6 +398,10 @@ public class DataCollectorService extends Service implements
 
 	@Override
 	public void handleCallIsInProgress(Date startDate, String destination) {
+		if (!destination.equals(destinationNumber)) {
+			return;
+		}
+		
 		Log.d(Constants.LogTag, String.format("Call is in progress: %s, %s",
 				startDate, destination));
 		Settings.System.putInt(getContentResolver(),
@@ -383,8 +426,9 @@ public class DataCollectorService extends Service implements
 		futureCall = executor.schedule(makeACallStrategy, 60, TimeUnit.SECONDS);
 
 		DeleteCallLogByNumber(destinationNumber);
+		Toast.makeText(this, "About to turn off screen", Toast.LENGTH_SHORT);
 		try {
-			Thread.sleep(10);
+			Thread.sleep(500);
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -401,6 +445,10 @@ public class DataCollectorService extends Service implements
 
 	@Override
 	public void handleCallEnded(Date date, String destinationNumber) {
+		if (!destinationNumber.equals(this.destinationNumber)) {
+			return;
+		}
+		
 		if (callData != null) {
 			callData.setTimeOfFinalization(SynchronizedClock.getCurrentTime());
 			JSONObject callJson = callData.getAsJson();
@@ -435,7 +483,7 @@ public class DataCollectorService extends Service implements
 	@Override
 	public void handleLocationChanged(Location location) {
 		Log.d(Constants.LogTag,
-				String.format("Location has changed: %s", location));
+				String.format("Location has changed. Accuracy: %f", location.getAccuracy()));
 		if (location.getAccuracy() < 100) {
 			makeACallStrategy = getPositionAqcuiredMakeACallTask();
 			testLatencyStrategy = getTestLatencyTask();
