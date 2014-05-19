@@ -1,11 +1,13 @@
 package com.tesis.datacollector;
 
 import java.io.IOException;
+import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,6 +16,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
+import javax.mail.SendFailedException;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -42,10 +46,14 @@ import android.net.NetworkInfo.State;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Message;
+import android.os.Messenger;
 import android.os.PowerManager;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.CallLog;
@@ -86,48 +94,59 @@ public class DataCollectorService extends Service implements
 		SharedPreferences.OnSharedPreferenceChangeListener {
 
 	// /Listeners
-	private LocationMonitor locationRetriever;
-	private PhoneSignalMonitor signalMonitor;
-	private BatteryLevelInspector batteryInspector;
-	private OutgoingCallsMonitor callsMonitor;
-	private TrafficStats trafficMonitor;
+	private volatile LocationMonitor locationRetriever;
+	private volatile PhoneSignalMonitor signalMonitor;
+	private volatile BatteryLevelInspector batteryInspector;
+	private volatile OutgoingCallsMonitor callsMonitor;
+	private volatile TrafficStats trafficMonitor;
 	private final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(10);
-	private PowerManager powerManager;
+	private volatile PowerManager powerManager;
 
 	// Datos a enviar
-	private Float currentSignal;
-	private Float oldSignal;
-	private Location lastKnownLocation;
-	private String lastDestination;
+	private volatile Float currentSignal;
+	private volatile Float oldSignal;
+	private volatile Location lastKnownLocation;
+	private volatile String lastDestination;
 	private String operatorName;
 
 	// Datos de configuracion
 	private String mPhoneNumber;
 	private String destinationNumber;
 
-	private Runnable makeACallStrategy;
-	private Runnable testLatencyStrategy;
+	private volatile Runnable makeACallStrategy;
+	private volatile Runnable testLatencyStrategy;
 
 	// Lista de paquetes
-	private DataList dataList;
+	private volatile DataList dataList;
 	private SharedPreferences preferences;
 
 	// TS de ultima llamada
-	private Date lastCallDate;
-	private Location lastCallLocation;
+	private volatile Date lastCallDate;
+	private volatile Location lastCallLocation;
 
 	// Timer para futura llamada si pasan mas de 30 min
 	private ScheduledFuture<?> futureCall;
 
-	private Date timeOfLastKnownLocation;
-	private ComponentName componentName;
-	private DevicePolicyManager devicePolicyManager;
-	private int normalScreenBrightness;
-	private CallMadeData callData;
+	private volatile Date timeOfLastKnownLocation;
+	private volatile int normalScreenBrightness;
+	private volatile CallMadeData callData;
 
+	private Messenger activityMessenger;
+	private volatile boolean monitorsWereInitialized = false;
+	
+	private volatile boolean cancelInitialization = false;
+	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		final Context ctx = this;
+		activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
+		final UncaughtExceptionHandler launchErrorsHandler = new UncaughtExceptionHandler() {
+			@Override
+			public void uncaughtException(Thread arg0, Throwable arg1) {
+				sendServiceEndedMessage();
+			}
+		};
+		
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -141,7 +160,6 @@ public class DataCollectorService extends Service implements
 				operatorName = telephonyManager.getNetworkOperatorName();
 
 				setPhoneNumbers(telephonyManager);
-
 				handler.post(new Runnable() {
 					@Override
 					public void run() {
@@ -153,21 +171,26 @@ public class DataCollectorService extends Service implements
 						trafficMonitor = new TrafficStats();
 						currentSignal = 0f;
 						powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-						devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
-
+							
+						monitorsWereInitialized = true;
 						// / Registra el observer para los SMS
 						final SMSObserver smsObserver = new SMSObserver(new Handler(), ctx);
 						ContentResolver contentResolver = ctx.getContentResolver();
 						contentResolver.registerContentObserver(Uri.parse("content://sms"),
 								true, smsObserver);
 						// end Registrar SMS OBSERVER
+						if (cancelInitialization) {
+							return;
+						}
 						
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								boolean synced = SynchronizedClock.synchronize();
-								if (!synced) {
+								if (!synced || cancelInitialization) {
+									sendServiceEndedMessage();
 									stopSelf();
+									return;
 								}
 								Log.d(Constants.LogTag, "Clock successfully synchronized");
 								handler.post(new Runnable() {
@@ -180,6 +203,9 @@ public class DataCollectorService extends Service implements
 										addAndRegisterMonitor(callsMonitor);
 
 										callsMonitor.addListener((CallEndedListener)ctx);
+										if (cancelInitialization) {
+											return;
+										}
 										executor.execute(new Runnable() {
 											@Override
 											public void run() {
@@ -187,7 +213,10 @@ public class DataCollectorService extends Service implements
 												boolean forceMobileConnectionForAddress = MobileDataUseForcer
 														.forceMobileConnectionForAddress(ctx,
 																Constants.LatencyTestAddress);
-
+												if (cancelInitialization) {
+													return;
+												}
+												
 												Log.d(Constants.LogTag, "Scheduling tasks");
 												executor.scheduleAtFixedRate(new Runnable() {
 													@Override
@@ -236,6 +265,13 @@ public class DataCollectorService extends Service implements
 																				PendingIntent.FLAG_UPDATE_CURRENT)).build();
 
 														startForeground(1, notification);
+														Message activityLaunchedMessage = Message.obtain();
+														activityLaunchedMessage.what = Constants.ServiceLaunched;
+														try {
+															activityMessenger.send(activityLaunchedMessage);
+														} catch (RemoteException e) {
+															e.printStackTrace();
+														}
 													}
 												});
 											}
@@ -279,25 +315,32 @@ public class DataCollectorService extends Service implements
 
 	@Override
 	public void onDestroy() {
+		cancelInitialization = true;
 		executor.shutdownNow();
-		locationRetriever.stopListening();
-		signalMonitor.stopListening();
-		callsMonitor.stopListening();
-		ExecutorService localExecutor = Executors.newSingleThreadExecutor();
+		if (monitorsWereInitialized) {
+			locationRetriever.stopListening();
+			signalMonitor.stopListening();
+			callsMonitor.stopListening();
+		}
+		
+		ExecutorService localExecutor = Executors.newCachedThreadPool();
 		Future<?> saveListFuture = localExecutor.submit(new Runnable() {
 			@Override
 			public void run() {
 				try {
-					dataList.sendDataListAndClearIfSuccessful();
+					if (dataList != null) { //dataList might be null if we cancel the service before the initialization ended.
+						dataList.sendDataListAndClearIfSuccessful();
+						dataList.save();
+					}
 				} catch (URISyntaxException e) {
 					Log.e(Constants.LogTag,
 							"Failed to send data to server uppon service closing");
 				}
-				dataList.save();
 				Handler handler = new Handler(Looper.getMainLooper());
 				handler.post(new Runnable() {
 					@Override
 					public void run() {
+						sendServiceEndedMessage();
 						DataCollectorService.super.onDestroy();					
 					}
 				});
@@ -445,7 +488,7 @@ public class DataCollectorService extends Service implements
 
 	@Override
 	public void handleCallEnded(Date date, String destinationNumber) {
-		if (!destinationNumber.equals(this.destinationNumber)) {
+		if (destinationNumber == null || !destinationNumber.equals(this.destinationNumber)) {
 			return;
 		}
 		
@@ -602,7 +645,7 @@ public class DataCollectorService extends Service implements
 	public boolean isScreenOn(PowerManager powerManager) {
 		return powerManager.isScreenOn();
 	}
-
+	
 	public Runnable getLocationTimeoutTask() {
 		return new Runnable() {
 			@Override
@@ -615,5 +658,15 @@ public class DataCollectorService extends Service implements
 				}
 			}
 		};
+	}
+	
+	private void sendServiceEndedMessage() {
+		Message serviceFailMessage = Message.obtain();
+		serviceFailMessage.what = Constants.ServiceLaunchFailed;
+		try {
+			activityMessenger.send(serviceFailMessage);
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
 	}
 }
