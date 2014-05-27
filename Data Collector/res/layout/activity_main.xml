@@ -28,7 +28,22 @@
             android:layout_height="wrap_content"
             android:text="Apagar servicio"
             android:id="@+id/stopServiceButton"
-            android:layout_gravity="left|center_vertical" />
+            android:layout_gravity="left|center_vertical" 
+            android:enabled="false"/>
+
+        <Button
+            android:id="@+id/enableGPSButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enable GPS"
+            android:enabled="false" />
+        
+        <Button
+            android:id="@+id/disableGPSButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Disable GPS" 
+            android:enabled="false"/>
 
         <Button
             android:layout_width="wrap_content"

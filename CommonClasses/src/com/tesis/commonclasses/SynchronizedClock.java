@@ -70,6 +70,7 @@ public class SynchronizedClock {
 		try {
 			return synchronizationFuture.get();
 		} catch (Exception e) {
+			System.out.println(e.toString());
 			return false;
 		}
 	}	

@@ -136,17 +136,12 @@ public class DataCollectorService extends Service implements
 	
 	private volatile boolean cancelInitialization = false;
 	
+	private ServiceMessenger serviceMessenger = new ServiceMessenger();
+	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		final Context ctx = this;
 		activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
-		final UncaughtExceptionHandler launchErrorsHandler = new UncaughtExceptionHandler() {
-			@Override
-			public void uncaughtException(Thread arg0, Throwable arg1) {
-				sendServiceEndedMessage();
-			}
-		};
-		
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -267,6 +262,8 @@ public class DataCollectorService extends Service implements
 														startForeground(1, notification);
 														Message activityLaunchedMessage = Message.obtain();
 														activityLaunchedMessage.what = Constants.ServiceLaunched;
+														Messenger messenger = new Messenger(serviceMessenger);
+														activityLaunchedMessage.replyTo = messenger;
 														try {
 															activityMessenger.send(activityLaunchedMessage);
 														} catch (RemoteException e) {
@@ -667,6 +664,18 @@ public class DataCollectorService extends Service implements
 			activityMessenger.send(serviceFailMessage);
 		} catch (RemoteException e) {
 			e.printStackTrace();
+		}
+	}
+	
+	private class ServiceMessenger extends Handler {
+		@Override
+		public void handleMessage(Message msg) {
+			if (msg.what == Constants.StartGPS) {
+				locationRetriever.startGPS();
+			} else if (msg.what == Constants.StopGPS) {
+				locationRetriever.stopGPS();
+			}
+			super.handleMessage(msg);
 		}
 	}
 }

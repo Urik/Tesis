@@ -61,12 +61,7 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
         locationListener = new LocationListener() {
             public void onLocationChanged(Location location) {
             	float accuracy = location.getAccuracy();
-//				if (accuracy < 100) {
-//	            	locationHasBeenSet = true;
-	            	//This needs to be called when the location changes so that the gpsStatusListener can check if the GPS signal has been fixed.
-//	            	gpsStatusListener.setLastLocationInMillis(SystemClock.elapsedRealtime());
             		handleLocationChanged(location);
-  //          	}
             }
 
             public void onStatusChanged(String provider, int status, Bundle extras) {}
@@ -74,7 +69,6 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
             public void onProviderEnabled(String provider) {}
 
             public void onProviderDisabled(String provider) {
-                //turnGPSOn();
             }
         };
         
@@ -83,6 +77,19 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
 //	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 //	        locationManager.addGpsStatusListener(gpsStatusListener);
         }
+    }
+    
+    public void startGPS() {
+    	if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+	        locationManager.addGpsStatusListener(gpsStatusListener);
+        }
+    }
+    
+    public void stopGPS() {
+    	locationManager.removeGpsStatusListener(gpsStatusListener);
+    	locationManager.removeUpdates(locationListener);
+    	locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
     }
 
     public void stopListening() {
