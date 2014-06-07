@@ -3,8 +3,11 @@ package com.tesis.datacollector;
 import com.tesis.commonclasses.Constants;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -22,7 +25,7 @@ public class MainActivity extends Activity {
 	private static final String START_GPS_BUTTON_STATE = "start_gps_button_state";
 	private static final String STOP_GPS_BUTTON_STATE = "stop_gps_button_state";
 	private ComponentName componentName;
-	private ActivityHandler handler = new ActivityHandler();
+	private ActivityHandler messagesHandler = new ActivityHandler();
 	private static Button startServiceButton;
 	private Button stopServiceButton;
 	private Button startGPSButton;
@@ -44,7 +47,7 @@ public class MainActivity extends Activity {
 				stopServiceButton.setEnabled(true);
 				Intent startServiceIntent = new Intent(MainActivity.this,
 						DataCollectorService.class);
-				startServiceIntent.putExtra("MESSENGER", new Messenger(handler));
+				startServiceIntent.putExtra("MESSENGER", new Messenger(messagesHandler));
 				startService(startServiceIntent);
 			}
 		});
@@ -65,10 +68,11 @@ public class MainActivity extends Activity {
 			public void onClick(View view) {
 				Intent intent = new Intent(MainActivity.this,
 						SettingsActivity.class);
-				intent.putExtra("MESSENGER", new Messenger(handler));
+				intent.putExtra("MESSENGER", new Messenger(messagesHandler));
 				startActivity(intent);
 			}
 		});
+		
 		
 		startGPSButton = (Button) findViewById(R.id.enableGPSButton);
 		startGPSButton.setOnClickListener(new View.OnClickListener() {
@@ -101,28 +105,23 @@ public class MainActivity extends Activity {
 				}
 			}
 		});
-	}
-
-	@Override
-	protected void onRestoreInstanceState(Bundle savedInstanceState) {
-		if (savedInstanceState != null) {
-			try {
-				boolean startButtonState = savedInstanceState.getBoolean(START_BUTTON_STATE);
-				boolean stopButtonState = savedInstanceState.getBoolean(STOP_BUTTON_STATE);
-				boolean startGPSButtonState = savedInstanceState.getBoolean(START_GPS_BUTTON_STATE);
-				boolean stopGPSButtonState = savedInstanceState.getBoolean(STOP_GPS_BUTTON_STATE);
-				
-				startServiceButton.setEnabled(startButtonState);
-				stopServiceButton.setEnabled(stopButtonState);
-				startGPSButton.setEnabled(startGPSButtonState);
-				stopGPSButton.setEnabled(stopGPSButtonState);
-			} catch (Exception e) {
-				Log.e(Constants.LogTag, "Error loading previous state objects");
+		
+		if (DataCollectorService.instance != null) {
+			ServiceState state = DataCollectorService.instance.getState();
+			boolean initializing = state.isInitializing();
+			boolean serviceIsWorking = state.getServiceIsWorking();
+			boolean gpsIsWorking = state.getGpsIsOn();
+			if (!initializing && !serviceIsWorking) {
+				setNotInitializedState();
+			} else {
+				stopServiceButton.setEnabled(initializing || serviceIsWorking);
+				startServiceButton.setEnabled(!serviceIsWorking && !initializing);
+				startGPSButton.setEnabled(!gpsIsWorking && serviceIsWorking);
+				stopGPSButton.setEnabled(gpsIsWorking && serviceIsWorking);
 			}
 		}
-		super.onRestoreInstanceState(savedInstanceState);
 	}
-
+	
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		super.onSaveInstanceState(outState);
@@ -133,33 +132,40 @@ public class MainActivity extends Activity {
 		outState.putBoolean(STOP_GPS_BUTTON_STATE, stopGPSButton.isEnabled());
 	}
 	
-	
-	
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		return super.onCreateOptionsMenu(menu);
 	}
 	
+	private void setNotInitializedState() {
+		startServiceButton.setEnabled(true);
+		stopServiceButton.setEnabled(false);
+		startGPSButton.setEnabled(false);
+		stopGPSButton.setEnabled(false);
+	}
+	
 	public class ActivityHandler extends Handler{
 
 		@Override
-		public void handleMessage(Message msg) {
-			switch (msg.what) {
-				case Constants.ServiceLaunched:
-					stopServiceButton.setEnabled(true);
-					startServiceButton.setEnabled(false);
-					startGPSButton.setEnabled(true);
-					stopGPSButton.setEnabled(false);
-					serviceMessenger = msg.replyTo;
-					break;
-				case Constants.ServiceLaunchFailed:
-					startServiceButton.setEnabled(true);
-					stopServiceButton.setEnabled(false);
-					startGPSButton.setEnabled(false);
-					stopGPSButton.setEnabled(false);
-					break;
-			}
+		public void handleMessage(final Message msg) {
+			runOnUiThread(new Runnable() {
+				
+				@Override
+				public void run() {
+					switch (msg.what) {
+						case Constants.ServiceLaunchedSuccesfully:
+							stopServiceButton.setEnabled(true);
+							startServiceButton.setEnabled(false);
+							startGPSButton.setEnabled(true);
+							stopGPSButton.setEnabled(false);
+							serviceMessenger = msg.replyTo;
+							break;
+						case Constants.ServiceLaunchFailed:
+							setNotInitializedState();
+							break;
+					}
+				}
+			});
 		}
-
 	}
 }

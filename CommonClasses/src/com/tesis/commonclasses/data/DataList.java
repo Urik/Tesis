@@ -59,11 +59,11 @@ public class DataList {
         dataForDispatching = new ArrayList<JSONObject>();
     }
 
-    public void addToPack(JSONObject data){
+    public synchronized void addToPack(JSONObject data){
         dataPackList.add(data);
     }
 
-    public void setDataPackList(List<JSONObject> dataPackList) {
+    public synchronized void setDataPackList(List<JSONObject> dataPackList) {
         this.dataPackList = dataPackList;
     }
 
@@ -131,7 +131,7 @@ public class DataList {
 		dataForDispatching.add(dispatchPacket);
 	}
 	
-	public void save() {
+	public synchronized void save() {
 		try {
 			FileOutputStream fos = context.openFileOutput(SERIALIZATION_FILENAME, Context.MODE_PRIVATE);
 			addDataToDispatchList();

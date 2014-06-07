@@ -35,10 +35,12 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.app.TaskStackBuilder;
 import android.app.admin.DevicePolicyManager;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.net.ConnectivityManager;
@@ -60,6 +62,9 @@ import android.provider.CallLog;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.support.v4.app.NotificationCompat;
+import android.telephony.CellSignalStrength;
+import android.telephony.CellSignalStrengthWcdma;
+import android.telephony.NeighboringCellInfo;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -93,6 +98,7 @@ public class DataCollectorService extends Service implements
 		GPSSignalLostListener,
 		SharedPreferences.OnSharedPreferenceChangeListener {
 
+	public volatile static DataCollectorService instance;
 	// /Listeners
 	private volatile LocationMonitor locationRetriever;
 	private volatile PhoneSignalMonitor signalMonitor;
@@ -103,8 +109,10 @@ public class DataCollectorService extends Service implements
 	private volatile PowerManager powerManager;
 
 	// Datos a enviar
-	private volatile Float currentSignal;
-	private volatile Float oldSignal;
+	private volatile Float currentGsmSignal;
+	private volatile Float oldGsmSignal;
+	private volatile Float current3GSignal;
+	private volatile Float old3GSignal;
 	private volatile Location lastKnownLocation;
 	private volatile String lastDestination;
 	private String operatorName;
@@ -137,12 +145,17 @@ public class DataCollectorService extends Service implements
 	private volatile boolean cancelInitialization = false;
 	
 	private ServiceMessenger serviceMessenger = new ServiceMessenger();
+	private volatile ServiceState state = new ServiceState();
 	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		final Context ctx = this;
-		activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
-		executor.execute(new Runnable() {
+		instance = this;
+		state.setInitializing(true);
+		if (intent != null && intent.getExtras().containsKey("MESSENGER")) {
+			activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
+		}
+		executor.execute(handleInitializationErrors(new Runnable() {
 			@Override
 			public void run() {
 				//Handler is used to run code on the main UI thread.
@@ -155,7 +168,7 @@ public class DataCollectorService extends Service implements
 				operatorName = telephonyManager.getNetworkOperatorName();
 
 				setPhoneNumbers(telephonyManager);
-				handler.post(new Runnable() {
+				handler.post(handleInitializationErrors(new Runnable() {
 					@Override
 					public void run() {
 						// Inicializar Variables
@@ -164,7 +177,7 @@ public class DataCollectorService extends Service implements
 						batteryInspector = new BatteryLevelInspector(ctx);
 						callsMonitor = new OutgoingCallsMonitor(ctx);
 						trafficMonitor = new TrafficStats();
-						currentSignal = 0f;
+						currentGsmSignal = 0f;
 						powerManager = (PowerManager) getSystemService(POWER_SERVICE);
 							
 						monitorsWereInitialized = true;
@@ -178,7 +191,7 @@ public class DataCollectorService extends Service implements
 							return;
 						}
 						
-						executor.execute(new Runnable() {
+						executor.execute(handleInitializationErrors(new Runnable() {
 							@Override
 							public void run() {
 								boolean synced = SynchronizedClock.synchronize();
@@ -188,7 +201,7 @@ public class DataCollectorService extends Service implements
 									return;
 								}
 								Log.d(Constants.LogTag, "Clock successfully synchronized");
-								handler.post(new Runnable() {
+								handler.post(handleInitializationErrors(new Runnable() {
 									@Override
 									public void run() {
 										// ADD TODOS LOS REGISTRERS
@@ -201,7 +214,7 @@ public class DataCollectorService extends Service implements
 										if (cancelInitialization) {
 											return;
 										}
-										executor.execute(new Runnable() {
+										executor.execute(handleInitializationErrors(new Runnable() {
 											@Override
 											public void run() {
 												Log.d(Constants.LogTag, "Setting network tests configuration");
@@ -247,7 +260,7 @@ public class DataCollectorService extends Service implements
 												executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
 														TimeUnit.SECONDS);
 												
-												handler.post(new Runnable() {
+												handler.post(handleInitializationErrors(new Runnable() {
 													@Override
 													public void run() {
 														Intent resultIntent = new Intent(DataCollectorService.this, MainActivity.class);
@@ -261,30 +274,50 @@ public class DataCollectorService extends Service implements
 
 														startForeground(1, notification);
 														Message activityLaunchedMessage = Message.obtain();
-														activityLaunchedMessage.what = Constants.ServiceLaunched;
+														activityLaunchedMessage.what = Constants.ServiceLaunchedSuccesfully;
 														Messenger messenger = new Messenger(serviceMessenger);
 														activityLaunchedMessage.replyTo = messenger;
+														state.setServiceIsWorking(true);
+														state.setInitializing(false);
 														try {
 															activityMessenger.send(activityLaunchedMessage);
 														} catch (RemoteException e) {
 															e.printStackTrace();
 														}
 													}
-												});
+												}));
 											}
-										});
+										}));
 									}
-								});
+								}));
 							}
-						});
+						}));
 					}
-				});
+				}));
 			}
-		});
+		}));
 		
 		return START_STICKY;
 	}
 
+	private Runnable handleInitializationErrors(final Runnable code) {
+		return new Runnable() {
+			
+			@Override
+			public void run() {
+				try {
+					code.run();
+				} catch (Exception e) {
+					state.setServiceIsWorking(false);
+					state.setInitializing(false);
+					state.setServiceIsWorking(false);
+					
+					stopSelf();
+				}
+			}
+		};
+	}
+	
 	private Runnable getTestLatencyTask() {
 		return new Runnable() {
 
@@ -309,6 +342,7 @@ public class DataCollectorService extends Service implements
 		destinationNumber = preferences.getString(
 				SettingsActivity.DESTINATION_NUMBER, "");
 	}
+	
 
 	@Override
 	public void onDestroy() {
@@ -338,6 +372,7 @@ public class DataCollectorService extends Service implements
 					@Override
 					public void run() {
 						sendServiceEndedMessage();
+						DataCollectorService.instance = null;
 						DataCollectorService.super.onDestroy();					
 					}
 				});
@@ -378,7 +413,7 @@ public class DataCollectorService extends Service implements
 			@Override
 			public void run() {
 				FailedLatencyCheckData failedLatencyCheckData = new FailedLatencyCheckData(
-						currentSignal,
+						currentGsmSignal,
 						batteryInspector.getBatteryLevelAsPercentage(),
 						lastKnownLocation, operatorName, mPhoneNumber, 0l);
 				JSONObject failedLatencyCheck = failedLatencyCheckData
@@ -452,7 +487,7 @@ public class DataCollectorService extends Service implements
 		lastCallLocation = lastKnownLocation; // registrar locacion de ultima
 		callData = null;
 		try {
-			callData = new CallMadeData(currentSignal,
+			callData = new CallMadeData(currentGsmSignal,
 					batteryInspector.getBatteryLevelAsPercentage(),
 					lastKnownLocation, SynchronizedClock.getCurrentTime(),
 					lastDestination, operatorName, mPhoneNumber);
@@ -556,7 +591,7 @@ public class DataCollectorService extends Service implements
 			String destinationNumber) {
 		SMSData messageData = null;
 		try {
-			messageData = new SMSData(currentSignal,
+			messageData = new SMSData(currentGsmSignal,
 					batteryInspector.getBatteryLevelAsPercentage(),
 					lastKnownLocation, timeInMs, operatorName,
 					SynchronizedClock.getCurrentTime(), mPhoneNumber,
@@ -578,15 +613,16 @@ public class DataCollectorService extends Service implements
 			Log.d(Constants.LogTag, "Pantalla encendida");
 		else
 			Log.d(Constants.LogTag, "Pantalla apagada");
-
-		oldSignal = currentSignal;
-		int strength = args.getNewSignalStrength().getGsmSignalStrength();
-		currentSignal = (float) strength;
+		oldGsmSignal = currentGsmSignal;
+		old3GSignal = current3GSignal;
+		int gsmStrength = args.getNewSignalStrength().getGsmSignalStrength();
+		current3GSignal = (float) args.getNewSignalStrength().getCdmaDbm();
+		currentGsmSignal = (float) gsmStrength;
 		Log.d(Constants.LogTag, String.format(
-				"The signal has changed from %s to %s", oldSignal,
-				currentSignal));
+				"The signal has changed from %s to %s", oldGsmSignal,
+				currentGsmSignal));
 		// Si la senial cambio de golpe en X porcentaje, se deben generar datos
-		if (Math.abs(currentSignal - Math.abs(oldSignal)) > 3) {
+		if (Math.abs(currentGsmSignal - Math.abs(oldGsmSignal)) > 3) {
 			System.out.println("*********Cambio de senial");
 			makeACallStrategy.run();
 		}
@@ -610,7 +646,7 @@ public class DataCollectorService extends Service implements
 		AsyncTask<Void, Void, Long> latencyCheckTask = new LatencyChecker(
 				getHandleLatencyErrorsTask()).execute();
 		Long timeInMs = latencyCheckTask.get();
-		dataList.addToPack(new InternetCheckData(currentSignal,
+		dataList.addToPack(new InternetCheckData(currentGsmSignal,
 				batteryInspector.getBatteryLevelAsPercentage(),
 				lastKnownLocation, operatorName, mPhoneNumber, timeInMs)
 				.getAsJson());
@@ -643,6 +679,10 @@ public class DataCollectorService extends Service implements
 		return powerManager.isScreenOn();
 	}
 	
+	public ServiceState getState() {
+		return state;
+	}
+	
 	public Runnable getLocationTimeoutTask() {
 		return new Runnable() {
 			@Override
@@ -672,8 +712,10 @@ public class DataCollectorService extends Service implements
 		public void handleMessage(Message msg) {
 			if (msg.what == Constants.StartGPS) {
 				locationRetriever.startGPS();
+				state.setGpsIsOn(true);
 			} else if (msg.what == Constants.StopGPS) {
 				locationRetriever.stopGPS();
+				state.setGpsIsOn(false);
 			}
 			super.handleMessage(msg);
 		}
