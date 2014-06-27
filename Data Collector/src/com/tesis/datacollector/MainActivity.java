@@ -105,7 +105,10 @@ public class MainActivity extends Activity {
 				}
 			}
 		});
-		
+	}
+	
+	@Override
+	protected void onResume() {
 		if (DataCollectorService.instance != null) {
 			ServiceState state = DataCollectorService.instance.getState();
 			boolean initializing = state.isInitializing();
@@ -120,8 +123,10 @@ public class MainActivity extends Activity {
 				stopGPSButton.setEnabled(gpsIsWorking && serviceIsWorking);
 			}
 		}
+		super.onResume();
 	}
-	
+
+
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		super.onSaveInstanceState(outState);

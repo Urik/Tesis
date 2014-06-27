@@ -25,6 +25,7 @@ public class SettingsActivity extends PreferenceActivity {
     public final static String GAP_BETWEEN_CALLS_IN_MSEC = "gap_between_calls_preference";
     public final static String SIGNAL_CHANGE_THRESHOLD = "signal_change_threshold";
     public final static String DISTANCE_THRESHOLD = "distance_threshold";
+    public final static String SEND_SMS = "send_sms";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

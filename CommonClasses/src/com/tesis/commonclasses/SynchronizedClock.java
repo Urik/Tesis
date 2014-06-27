@@ -20,7 +20,7 @@ public class SynchronizedClock {
 	
 	private final static Object lock = new Object();
 	
-	private static TimeSynchronizer timeSynchronizer = new SntpTimeSynchronizer();
+	private static TimeSynchronizer timeSynchronizer = new NtpTimeSynchronizer();
 	
 	public static DateTime getCurrentTime() {
 		synchronized(lock)
@@ -81,26 +81,5 @@ public class SynchronizedClock {
 
 	public static void setTimeSynchronizer(TimeSynchronizer timeSynchronizer) {
 		SynchronizedClock.timeSynchronizer = timeSynchronizer;
-	}
-
-	private static class NtpClient extends AsyncTask<Void, Void, DateTime> {
-		@Override
-		protected DateTime doInBackground(Void... arg0) {
-			while (true) {
-				SntpClient sntpClient = new SntpClient();
-		        boolean timeObtained = sntpClient.requestTime("ar.pool.ntp.org", 10000);
-		        if (timeObtained) {
-		        	long realTime = sntpClient.getNtpTime() + SystemClock.elapsedRealtime() - sntpClient.getNtpTimeReference();
-			        return new DateTime(realTime);
-		        } else {
-		        	try {
-		        	    Thread.sleep(1000);
-		        	} catch(InterruptedException ex) {
-		        	    Thread.currentThread().interrupt();
-		        	}
-		        }
-
-			}
-		}
 	}
 }

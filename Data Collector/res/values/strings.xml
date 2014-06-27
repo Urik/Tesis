@@ -6,5 +6,6 @@
     <string name="hello_world">Hello world!</string>
     <string name="title_activity_turn_off_screen">TurnOffScreenActivity</string>
     <string name="title_activity_dummy_brightness">DummyBrightnessActivity</string>
+    <string name="destination_number">2233036317</string>
 
 </resources>

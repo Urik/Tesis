@@ -1,54 +1,29 @@
 package com.tesis.datacollector;
 
 import java.io.IOException;
-import java.lang.Thread.UncaughtExceptionHandler;
-import java.net.InetAddress;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import javax.mail.SendFailedException;
-
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.params.BasicHttpParams;
-import org.apache.http.params.HttpConnectionParams;
-import org.apache.http.params.HttpParams;
-import org.joda.time.DateTime;
 import org.json.JSONObject;
 
-import android.app.Activity;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.app.TaskStackBuilder;
-import android.app.admin.DevicePolicyManager;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.location.Location;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo.State;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -56,29 +31,22 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.PowerManager;
 import android.os.RemoteException;
-import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.CallLog;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.support.v4.app.NotificationCompat;
-import android.telephony.CellSignalStrength;
-import android.telephony.CellSignalStrengthWcdma;
-import android.telephony.NeighboringCellInfo;
+import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
-import android.text.TextUtils;
 import android.util.Log;
-import android.view.Window;
-import android.view.WindowManager.LayoutParams;
 import android.widget.Toast;
 
 import com.antonc.phone_schedule.Dummy.DummyBrightnessActivity;
 import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.MockTimeSynchronizer;
 import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.data.CallMadeData;
-import com.tesis.commonclasses.data.FailedLatencyCheckData;
 import com.tesis.commonclasses.data.DataList;
+import com.tesis.commonclasses.data.FailedLatencyCheckData;
 import com.tesis.commonclasses.data.InternetCheckData;
 import com.tesis.commonclasses.data.SMSData;
 import com.tesis.commonclasses.listeners.EventsProducer;
@@ -123,6 +91,7 @@ public class DataCollectorService extends Service implements
 
 	private volatile Runnable makeACallStrategy;
 	private volatile Runnable testLatencyStrategy;
+	private volatile Runnable sendSmsStrategy;
 
 	// Lista de paquetes
 	private volatile DataList dataList;
@@ -147,10 +116,16 @@ public class DataCollectorService extends Service implements
 	private ServiceMessenger serviceMessenger = new ServiceMessenger();
 	private volatile ServiceState state = new ServiceState();
 	
+	private SmsSender smsSender;
+	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		final Context ctx = this;
 		instance = this;
+		preferences = PreferenceManager.getDefaultSharedPreferences(this);
+		
+		smsSender = new SmsSender(this);
+		smsSender.addListener(this);
 		state.setInitializing(true);
 		if (intent != null && intent.getExtras().containsKey("MESSENGER")) {
 			activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
@@ -164,6 +139,7 @@ public class DataCollectorService extends Service implements
 				dataList = DataList.load(ctx);
 				makeACallStrategy = getEmptyTask();
 				testLatencyStrategy = getEmptyTask();
+				sendSmsStrategy = getEmptyTask();
 				// Obtener el proveedor de telefonia
 				operatorName = telephonyManager.getNetworkOperatorName();
 
@@ -209,11 +185,11 @@ public class DataCollectorService extends Service implements
 										addAndRegisterMonitor(locationRetriever);
 										addAndRegisterMonitor(signalMonitor);
 										addAndRegisterMonitor(callsMonitor);
-
 										callsMonitor.addListener((CallEndedListener)ctx);
 										if (cancelInitialization) {
 											return;
 										}
+										
 										executor.execute(handleInitializationErrors(new Runnable() {
 											@Override
 											public void run() {
@@ -256,7 +232,17 @@ public class DataCollectorService extends Service implements
 														}
 													}, 0, 120, TimeUnit.SECONDS);
 												}
-
+												
+												boolean shouldSendChronicSms = preferences.getBoolean(SettingsActivity.SEND_SMS, false);
+												if(shouldSendChronicSms) {
+													executor.scheduleWithFixedDelay(new Runnable() {
+														@Override
+														public void run() {
+															sendSmsStrategy.run();
+														}
+													}, 0, 300, TimeUnit.SECONDS); //5 minutes
+												}
+												
 												executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
 														TimeUnit.SECONDS);
 												
@@ -335,12 +321,10 @@ public class DataCollectorService extends Service implements
 	private void setPhoneNumbers(TelephonyManager telephonyManager) {
 		mPhoneNumber = telephonyManager.getLine1Number();
 		if (mPhoneNumber.equals("")) {
-			preferences = PreferenceManager.getDefaultSharedPreferences(this);
 			mPhoneNumber = preferences.getString(SettingsActivity.PHONE_NUMBER,
 					"");
 		}
-		destinationNumber = preferences.getString(
-				SettingsActivity.DESTINATION_NUMBER, "");
+		destinationNumber = preferences.getString(SettingsActivity.DESTINATION_NUMBER, "");
 	}
 	
 
@@ -561,6 +545,7 @@ public class DataCollectorService extends Service implements
 				String.format("Location has changed. Accuracy: %f", location.getAccuracy()));
 		if (location.getAccuracy() < 100) {
 			makeACallStrategy = getPositionAqcuiredMakeACallTask();
+			sendSmsStrategy = getSendSmsTask();
 			testLatencyStrategy = getTestLatencyTask();
 			Location previousLocation = lastKnownLocation;
 			this.lastKnownLocation = location;
@@ -576,6 +561,7 @@ public class DataCollectorService extends Service implements
 			}
 		} else {
 			makeACallStrategy = getEmptyTask();
+			sendSmsStrategy = getEmptyTask();
 			testLatencyStrategy = getEmptyTask();
 		}
 	}
@@ -637,8 +623,7 @@ public class DataCollectorService extends Service implements
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
 			String key) {
 		if (key.equals(SettingsActivity.PHONE_NUMBER)) {
-			mPhoneNumber = sharedPreferences.getString(
-					SettingsActivity.PHONE_NUMBER, "");
+			mPhoneNumber = sharedPreferences.getString(SettingsActivity.PHONE_NUMBER, "");
 		}
 	}
 
@@ -683,6 +668,15 @@ public class DataCollectorService extends Service implements
 		return state;
 	}
 	
+	private Runnable getSendSmsTask() {
+		return new Runnable() {
+			@Override
+			public void run() {
+				smsSender.sendSms(destinationNumber, "");
+			}
+		};
+	}
+	
 	public Runnable getLocationTimeoutTask() {
 		return new Runnable() {
 			@Override
@@ -692,6 +686,7 @@ public class DataCollectorService extends Service implements
 								- timeOfLastKnownLocation.getTime() > 5000 * 60)) { // Si pasaron mas de 5 minutos desde el ultimo location update.
 					testLatencyStrategy = getEmptyTask();
 					makeACallStrategy = getEmptyTask();
+					sendSmsStrategy = getEmptyTask();
 				}
 			}
 		};

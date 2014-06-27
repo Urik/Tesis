@@ -6,7 +6,7 @@
     <EditTextPreference
         android:key="destination_phone_number_preference"
         android:title="Destination phone number"
-        android:defaultValue="2233036317" />
+        android:defaultValue="@string/destination_number" />
     <EditTextPreference
         android:key="gap_between_calls_preference"
         android:title="Time gap between calls"
@@ -19,4 +19,8 @@
         android:key="distance_threshold"
         android:title="Distanece between calls"
         android:contentDescription="In meters" />
+    <CheckBoxPreference
+        android:key="send_sms"
+        android:title="Periodically send SMS messages to the receptor"
+        android:defaultValue="false" />
 </PreferenceScreen>

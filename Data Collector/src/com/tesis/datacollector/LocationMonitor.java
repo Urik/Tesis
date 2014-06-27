@@ -94,8 +94,9 @@ public class LocationMonitor implements EventsProducer<LocationChangedListener>,
 
     public void stopListening() {
     	if (locationManager != null) {
-	//        locationManager.removeGpsStatusListener(gpsStatusListener);
-	        locationManager.removeUpdates(locationListener);
+    		if (locationListener != null) {
+    			locationManager.removeUpdates(locationListener);
+    		}
 	        executor.shutdownNow();
 	        locationManager = null;
 	        locationListener = null;

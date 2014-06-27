@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.util.Log;
 
+import com.tesis.commonclasses.Constants;
 import com.tesis.commonclasses.listeners.EventsProducer;
 import com.tesis.datacollector.listeners.PhoneIsMakingACallListener;
 
@@ -35,7 +37,11 @@ public class OutgoingCallsMonitorHelper extends BroadcastReceiver implements Eve
     }
 
     public void stopListening() {
-        context.unregisterReceiver(this);
+    	try {
+    		context.unregisterReceiver(this);
+    	} catch (RuntimeException e) {
+    		Log.d(Constants.LogTag, "Unregistering an unregistered receiver");
+    	}
     }
 
     private void handleOutgoingCall(String number, Date date) {
