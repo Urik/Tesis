@@ -341,7 +341,7 @@ public class DataCollectorService extends Service implements
 						dataList.save();
 					}
 				} catch (URISyntaxException e) {
-					Log.e(Constants.LogTag, "Failed to send data to server uppon service closing");
+					Log.e(Constants.LogTag, "Failed to send data to server upon service closing");
 				}
 				Handler handler = new Handler(Looper.getMainLooper());
 				handler.post(new Runnable() {
