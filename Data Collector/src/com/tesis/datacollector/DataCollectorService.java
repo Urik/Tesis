@@ -295,15 +295,15 @@ public class DataCollectorService extends Service implements
 		};
 	}
 	
-	private Runnable getTestLatencyTask() {
+	private Runnable getTestNetworkLatencyTask() {
 		return new Runnable() {
 
 			@Override
 			public void run() {
 				try {
-					testLatency();
+					testNetworkLatency();
 				} catch (Throwable e) {
-					e.printStackTrace();
+					Log.e(Constants.LogTag, "There has been an error while testing the network latency", e);
 				}
 			}
 		};
@@ -312,8 +312,7 @@ public class DataCollectorService extends Service implements
 	private void setPhoneNumbers(TelephonyManager telephonyManager) {
 		mPhoneNumber = telephonyManager.getLine1Number();
 		if (mPhoneNumber.equals("")) {
-			mPhoneNumber = preferences.getString(SettingsActivity.PHONE_NUMBER,
-					"");
+			mPhoneNumber = preferences.getString(SettingsActivity.PHONE_NUMBER, "");
 		}
 		destinationNumber = preferences.getString(SettingsActivity.DESTINATION_NUMBER, "");
 	}
@@ -532,7 +531,7 @@ public class DataCollectorService extends Service implements
 		if (location.getAccuracy() < 100) {
 			makeACallStrategy = getPositionAqcuiredMakeACallTask();
 			sendSmsStrategy = getSendSmsTask();
-			testLatencyStrategy = getTestLatencyTask();
+			testLatencyStrategy = getTestNetworkLatencyTask();
 			Location previousLocation = lastKnownLocation;
 			this.lastKnownLocation = location;
 			timeOfLastKnownLocation = new Date();
@@ -613,9 +612,8 @@ public class DataCollectorService extends Service implements
 		}
 	}
 
-	public void testLatency() throws InterruptedException, ExecutionException {
-		AsyncTask<Void, Void, Long> latencyCheckTask = new LatencyChecker(
-				getHandleLatencyErrorsTask()).execute();
+	public void testNetworkLatency() throws InterruptedException, ExecutionException {
+		AsyncTask<Void, Void, Long> latencyCheckTask = new LatencyChecker(getHandleLatencyErrorsTask()).execute();
 		Long timeInMs = latencyCheckTask.get();
 		dataList.addToPack(new InternetCheckData(currentGsmSignal,
 				batteryInspector.getBatteryLevelAsPercentage(),
@@ -626,7 +624,6 @@ public class DataCollectorService extends Service implements
 	private void tryToCall() {
 		// Si nunca se llamo o paso un tiempo razonable desde ultima llamada se
 		// debe llamar
-		// agregar && isScreenOn()
 		if (!powerManager.isScreenOn()
 				&& callsMonitor.getActualState() != TelephonyManager.CALL_STATE_OFFHOOK
 				&& (lastCallDate == null || (new Date()).getTime()
@@ -642,8 +639,7 @@ public class DataCollectorService extends Service implements
 
 	public void DeleteCallLogByNumber(String number) {
 		String queryString = "NUMBER=" + number;
-		this.getContentResolver().delete(CallLog.Calls.CONTENT_URI,
-				queryString, null);
+		this.getContentResolver().delete(CallLog.Calls.CONTENT_URI, queryString, null);
 	}
 
 	public boolean isScreenOn(PowerManager powerManager) {
