@@ -149,6 +149,7 @@ public class DataCollectorService extends Service implements
                 true, smsObserver);
         // end Registrar SMS OBSERVER
 
+        //We execute this part asynchronously in order to not freeze the UI.
 		executor.execute(handleInitializationErrors(new Runnable() {
 			@Override
 			public void run() {
@@ -169,6 +170,8 @@ public class DataCollectorService extends Service implements
                     return;
                 }
                 Log.d(Constants.LogTag, "Clock successfully synchronized");
+
+                //We execute this part in the UI thread because some of its functions should run there.
 				handler.post(handleInitializationErrors(new Runnable() {
 					@Override
 					public void run() {
@@ -191,6 +194,7 @@ public class DataCollectorService extends Service implements
                                         .forceMobileConnectionForAddress(ctx,
                                                 Constants.LatencyTestAddress);
                                 if (cancelInitialization) {
+                                    stopSelf();
                                     return;
                                 }
 
@@ -337,8 +341,7 @@ public class DataCollectorService extends Service implements
 						dataList.save();
 					}
 				} catch (URISyntaxException e) {
-					Log.e(Constants.LogTag,
-							"Failed to send data to server uppon service closing");
+					Log.e(Constants.LogTag, "Failed to send data to server uppon service closing");
 				}
 				Handler handler = new Handler(Looper.getMainLooper());
 				handler.post(new Runnable() {
