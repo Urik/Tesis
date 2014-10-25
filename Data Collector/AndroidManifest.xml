@@ -42,7 +42,6 @@
             </intent-filter>
         </activity>
 
-        <service android:name="com.tesis.datacollector.ListenerService" />
         <service android:name="com.tesis.datacollector.DataCollectorService" />
 
         <activity

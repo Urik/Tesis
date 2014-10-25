@@ -130,12 +130,30 @@ public class DataCollectorService extends Service implements
 		if (intent != null && intent.getExtras().containsKey("MESSENGER")) {
 			activityMessenger = (Messenger) intent.getExtras().get("MESSENGER");
 		}
+
+        final TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+        // Inicializar Variables
+        signalMonitor = new PhoneSignalMonitor(telephonyManager);
+        locationRetriever = new LocationMonitor(ctx);
+        batteryInspector = new BatteryLevelInspector(ctx);
+        callsMonitor = new OutgoingCallsMonitor(ctx);
+        trafficMonitor = new TrafficStats();
+        currentGsmSignal = 0f;
+        powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+
+        monitorsWereInitialized = true;
+        // / Registra el observer para los SMS
+        final SMSObserver smsObserver = new SMSObserver(new Handler(), ctx);
+        ContentResolver contentResolver = ctx.getContentResolver();
+        contentResolver.registerContentObserver(Uri.parse("content://sms"),
+                true, smsObserver);
+        // end Registrar SMS OBSERVER
+
 		executor.execute(handleInitializationErrors(new Runnable() {
 			@Override
 			public void run() {
 				//Handler is used to run code on the main UI thread.
 				final Handler handler = new Handler(Looper.getMainLooper());
-				final TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 				dataList = DataList.load(ctx);
 				makeACallStrategy = getEmptyTask();
 				testLatencyStrategy = getEmptyTask();
@@ -144,141 +162,112 @@ public class DataCollectorService extends Service implements
 				operatorName = telephonyManager.getNetworkOperatorName();
 
 				setPhoneNumbers(telephonyManager);
+                boolean synced = SynchronizedClock.synchronize();
+                if (!synced || cancelInitialization) {
+                    sendServiceEndedMessage();
+                    stopSelf();
+                    return;
+                }
+                Log.d(Constants.LogTag, "Clock successfully synchronized");
 				handler.post(handleInitializationErrors(new Runnable() {
 					@Override
 					public void run() {
-						// Inicializar Variables
-						signalMonitor = new PhoneSignalMonitor(telephonyManager);
-						locationRetriever = new LocationMonitor(ctx);
-						batteryInspector = new BatteryLevelInspector(ctx);
-						callsMonitor = new OutgoingCallsMonitor(ctx);
-						trafficMonitor = new TrafficStats();
-						currentGsmSignal = 0f;
-						powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-							
-						monitorsWereInitialized = true;
-						// / Registra el observer para los SMS
-						final SMSObserver smsObserver = new SMSObserver(new Handler(), ctx);
-						ContentResolver contentResolver = ctx.getContentResolver();
-						contentResolver.registerContentObserver(Uri.parse("content://sms"),
-								true, smsObserver);
-						// end Registrar SMS OBSERVER
-						if (cancelInitialization) {
-							return;
-						}
-						
-						executor.execute(handleInitializationErrors(new Runnable() {
-							@Override
-							public void run() {
-								boolean synced = SynchronizedClock.synchronize();
-								if (!synced || cancelInitialization) {
-									sendServiceEndedMessage();
-									stopSelf();
-									return;
-								}
-								Log.d(Constants.LogTag, "Clock successfully synchronized");
-								handler.post(handleInitializationErrors(new Runnable() {
-									@Override
-									public void run() {
-										// ADD TODOS LOS REGISTRERS
-										addAndRegisterMonitor(smsObserver);
-										addAndRegisterMonitor(locationRetriever);
-										addAndRegisterMonitor(signalMonitor);
-										addAndRegisterMonitor(callsMonitor);
-										callsMonitor.addListener((CallEndedListener)ctx);
-										if (cancelInitialization) {
-											return;
-										}
-										
-										executor.execute(handleInitializationErrors(new Runnable() {
-											@Override
-											public void run() {
-												Log.d(Constants.LogTag, "Setting network tests configuration");
-												boolean forceMobileConnectionForAddress = MobileDataUseForcer
-														.forceMobileConnectionForAddress(ctx,
-																Constants.LatencyTestAddress);
-												if (cancelInitialization) {
-													return;
-												}
-												
-												Log.d(Constants.LogTag, "Scheduling tasks");
-												executor.scheduleAtFixedRate(new Runnable() {
-													@Override
-													public void run() {
-														try {
-															SynchronizedClock.synchronize();
-														} catch (Throwable e) {
-															Log.e(Constants.LogTag, "Failed to synchronize");
-														}
-													}
-												}, 0, 60, TimeUnit.SECONDS);
+                        // ADD TODOS LOS REGISTRERS
+                        addAndRegisterMonitor(smsObserver);
+                        addAndRegisterMonitor(locationRetriever);
+                        addAndRegisterMonitor(signalMonitor);
+                        addAndRegisterMonitor(callsMonitor);
+                        callsMonitor.addListener((CallEndedListener) ctx);
+                        if (cancelInitialization) {
+                            stopSelf();
+                            return;
+                        }
 
-												executor.scheduleWithFixedDelay(new Runnable() {
-													@Override
-													public void run() {
-														try {
-															dataList.sendDataListAndClearIfSuccessful();
-														} catch (Throwable e) {
-															e.printStackTrace();
-														}
-													}
-												}, 0, 600, TimeUnit.SECONDS);
+                        executor.execute(handleInitializationErrors(new Runnable() {
+                            @Override
+                            public void run() {
+                                Log.d(Constants.LogTag, "Setting network tests configuration");
+                                boolean forceMobileConnectionForAddress = MobileDataUseForcer
+                                        .forceMobileConnectionForAddress(ctx,
+                                                Constants.LatencyTestAddress);
+                                if (cancelInitialization) {
+                                    return;
+                                }
 
-												if (forceMobileConnectionForAddress) {
-													executor.scheduleWithFixedDelay(new Runnable() {
-														@Override
-														public void run() {
-															testLatencyStrategy.run();
-														}
-													}, 0, 120, TimeUnit.SECONDS);
-												}
-												
-												boolean shouldSendChronicSms = preferences.getBoolean(SettingsActivity.SEND_SMS, false);
-												if(shouldSendChronicSms) {
-													executor.scheduleWithFixedDelay(new Runnable() {
-														@Override
-														public void run() {
-															sendSmsStrategy.run();
-														}
-													}, 0, 300, TimeUnit.SECONDS); //5 minutes
-												}
-												
-												executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
-														TimeUnit.SECONDS);
-												
-												handler.post(handleInitializationErrors(new Runnable() {
-													@Override
-													public void run() {
-														Intent resultIntent = new Intent(DataCollectorService.this, MainActivity.class);
-														Notification notification = new NotificationCompat.Builder(DataCollectorService.this)
-																.setSmallIcon(R.drawable.ic_stat_dc)
-																.setContentTitle("DataCollector")
-																.setContentText("Tesis Data Collector is working")
-																.setContentIntent(
-																		PendingIntent.getActivity(DataCollectorService.this, 1, resultIntent,
-																				PendingIntent.FLAG_UPDATE_CURRENT)).build();
+                                Log.d(Constants.LogTag, "Scheduling tasks");
+                                executor.scheduleAtFixedRate(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        try {
+                                            SynchronizedClock.synchronize();
+                                        } catch (Throwable e) {
+                                            Log.e(Constants.LogTag, "Failed to synchronize");
+                                        }
+                                    }
+                                }, 0, 60, TimeUnit.SECONDS);
 
-														startForeground(1, notification);
-														Message activityLaunchedMessage = Message.obtain();
-														activityLaunchedMessage.what = Constants.ServiceLaunchedSuccesfully;
-														Messenger messenger = new Messenger(serviceMessenger);
-														activityLaunchedMessage.replyTo = messenger;
-														state.setServiceIsWorking(true);
-														state.setInitializing(false);
-														try {
-															activityMessenger.send(activityLaunchedMessage);
-														} catch (RemoteException e) {
-															e.printStackTrace();
-														}
-													}
-												}));
-											}
-										}));
-									}
-								}));
-							}
-						}));
-					}
+                                executor.scheduleWithFixedDelay(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        try {
+                                            dataList.sendDataListAndClearIfSuccessful();
+                                        } catch (Throwable e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+                                }, 0, 600, TimeUnit.SECONDS);
+
+                                if (forceMobileConnectionForAddress) {
+                                    executor.scheduleWithFixedDelay(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            testLatencyStrategy.run();
+                                        }
+                                    }, 0, 120, TimeUnit.SECONDS);
+                                }
+
+                                boolean shouldSendChronicSms = preferences.getBoolean(SettingsActivity.SEND_SMS, false);
+                                if (shouldSendChronicSms) {
+                                    executor.scheduleWithFixedDelay(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            sendSmsStrategy.run();
+                                        }
+                                    }, 0, 300, TimeUnit.SECONDS); //5 minutes
+                                }
+
+                                executor.scheduleWithFixedDelay(getLocationTimeoutTask(), 0, 60,
+                                        TimeUnit.SECONDS);
+
+                                handler.post(handleInitializationErrors(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Intent resultIntent = new Intent(DataCollectorService.this, MainActivity.class);
+                                        Notification notification = new NotificationCompat.Builder(DataCollectorService.this)
+                                                .setSmallIcon(R.drawable.ic_stat_dc)
+                                                .setContentTitle("DataCollector")
+                                                .setContentText("Tesis Data Collector is working")
+                                                .setContentIntent(
+                                                        PendingIntent.getActivity(DataCollectorService.this, 1, resultIntent,
+                                                                PendingIntent.FLAG_UPDATE_CURRENT)).build();
+
+                                        startForeground(1, notification);
+                                        Message activityLaunchedMessage = Message.obtain();
+                                        activityLaunchedMessage.what = Constants.ServiceLaunchedSuccesfully;
+                                        Messenger messenger = new Messenger(serviceMessenger);
+                                        activityLaunchedMessage.replyTo = messenger;
+                                        state.setServiceIsWorking(true);
+                                        state.setInitializing(false);
+                                        try {
+                                            activityMessenger.send(activityLaunchedMessage);
+                                        } catch (RemoteException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+                                }));
+                            }
+                        }));
+                    }
 				}));
 			}
 		}));

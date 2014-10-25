@@ -1,12 +1,9 @@
 package com.tesis.commonclasses.data;
 
 import android.content.Context;
-import android.os.Environment;
-import android.provider.OpenableColumns;
 import android.util.Log;
 
 import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.EmailSender;
 import com.tesis.commonclasses.SynchronizedClock;
 import com.tesis.commonclasses.TesisTimeFormatter;
 
@@ -21,31 +18,20 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.joda.time.DateTime;
-import org.joda.time.format.ISODateTimeFormat;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
-import javax.mail.MessagingException;
-
-/**
- * Created by joaquin on 11/4/13.
- */
 public class DataList {
     private List<JSONObject> dataPackList;
     private List<JSONObject> dataForDispatching;
@@ -102,13 +88,10 @@ public class DataList {
 		} catch (JSONException e) {
 			Log.e(Constants.LogTag, "Error parsing JSON");
 		} catch (UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (ClientProtocolException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	    	
