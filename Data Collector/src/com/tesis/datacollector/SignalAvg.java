@@ -1,10 +1,5 @@
 package com.tesis.datacollector;
 
-import com.tesis.commonclasses.listeners.EventsProducer;
-
-import java.util.HashSet;
-import java.util.Set;
-
 /**
  * Created by joaquin on 10/29/13.
  */

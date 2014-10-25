@@ -1,9 +1,5 @@
 package com.tesis.datacollector;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.concurrent.ExecutionException;
-
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo.State;
@@ -12,6 +8,9 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.tesis.commonclasses.Constants;
+
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 public class MobileDataUseForcer {
 	/**

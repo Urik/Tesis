@@ -1,15 +1,14 @@
 package com.tesis.datacollector;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import android.location.GpsStatus;
+import android.location.GpsStatus.Listener;
+import android.os.SystemClock;
 
 import com.tesis.commonclasses.listeners.EventsProducer;
 import com.tesis.datacollector.listeners.GPSSignalLostListener;
 
-import android.location.GpsStatus;
-import android.location.GpsStatus.Listener;
-import android.os.SystemClock;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GPSStatusListener implements Listener, EventsProducer<GPSSignalLostListener> {
 	private List<GPSSignalLostListener> listeners = new ArrayList<GPSSignalLostListener>();

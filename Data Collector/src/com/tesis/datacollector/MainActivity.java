@@ -1,23 +1,18 @@
 package com.tesis.datacollector;
 
-import com.tesis.commonclasses.Constants;
-
 import android.app.Activity;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
-import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
+
+import com.tesis.commonclasses.Constants;
 
 public class MainActivity extends Activity {
 	private static final String STOP_BUTTON_STATE = "stop_button_state";
@@ -135,11 +130,6 @@ public class MainActivity extends Activity {
 		outState.putBoolean(STOP_BUTTON_STATE, stopServiceButton.isEnabled());
 		outState.putBoolean(START_GPS_BUTTON_STATE, startGPSButton.isEnabled());
 		outState.putBoolean(STOP_GPS_BUTTON_STATE, stopGPSButton.isEnabled());
-	}
-	
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		return super.onCreateOptionsMenu(menu);
 	}
 	
 	private void setNotInitializedState() {

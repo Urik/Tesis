@@ -1,6 +1,8 @@
 package com.tesis.datacollector;
 
-import java.io.IOException;
+import android.os.AsyncTask;
+
+import com.tesis.commonclasses.Constants;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -10,9 +12,7 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 
-import com.tesis.commonclasses.Constants;
-
-import android.os.AsyncTask;
+import java.io.IOException;
 
 public class LatencyChecker extends AsyncTask<Void, Void, Long>{
 

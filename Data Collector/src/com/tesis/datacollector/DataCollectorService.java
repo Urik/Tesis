@@ -1,18 +1,5 @@
 package com.tesis.datacollector;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.Date;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import org.json.JSONObject;
-
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -36,7 +23,6 @@ import android.provider.CallLog;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.support.v4.app.NotificationCompat;
-import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.widget.Toast;
@@ -59,6 +45,18 @@ import com.tesis.datacollector.listeners.CallIsInProgressListener;
 import com.tesis.datacollector.listeners.GPSSignalLostListener;
 import com.tesis.datacollector.listeners.LocationChangedListener;
 import com.tesis.datacollector.listeners.SMSSentListener;
+
+import org.json.JSONObject;
+
+import java.net.URISyntaxException;
+import java.util.Date;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class DataCollectorService extends Service implements
 		SignalChangedListener, LocationChangedListener,
@@ -365,11 +363,7 @@ public class DataCollectorService extends Service implements
 		return new Runnable() {
 			@Override
 			public void run() {
-				try {
-					tryToCall();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+                tryToCall();
 			}
 		};
 	}
@@ -629,7 +623,7 @@ public class DataCollectorService extends Service implements
 				.getAsJson());
 	}
 
-	private void tryToCall() throws IOException {
+	private void tryToCall() {
 		// Si nunca se llamo o paso un tiempo razonable desde ultima llamada se
 		// debe llamar
 		// agregar && isScreenOn()

@@ -1,23 +1,20 @@
 package com.tesis.datacollector;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.joda.time.DateTime;
-import org.joda.time.Period;
-import org.joda.time.Seconds;
-
-import com.tesis.commonclasses.Constants;
-import com.tesis.commonclasses.listeners.EventsProducer;
-import com.tesis.datacollector.listeners.SMSSentListener;
-
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.telephony.SmsManager;
-import android.util.Log;
+
+import com.tesis.commonclasses.listeners.EventsProducer;
+import com.tesis.datacollector.listeners.SMSSentListener;
+
+import org.joda.time.DateTime;
+import org.joda.time.Period;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class SmsSender extends BroadcastReceiver implements EventsProducer<SMSSentListener>{
 
