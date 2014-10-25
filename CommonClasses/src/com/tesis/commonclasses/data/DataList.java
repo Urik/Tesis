@@ -70,18 +70,17 @@ public class DataList {
 	    	HttpClient httpclient = new DefaultHttpClient();
             HttpPost httppost = new HttpPost(new URI(Constants.ServerAddress + "tesis/record.php"));
 
-	            // Add your data
+            // Add your data
             List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
             nameValuePairs.add(new BasicNameValuePair("data", dispatchPacket.toString(4)));
             httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 	
-	            // Execute HTTP Post Request
+            // Execute HTTP Post Request
             HttpResponse response = httpclient.execute(httppost);
             HttpEntity entity = response.getEntity();
             String responseString = EntityUtils.toString(entity, "UTF-8");
             System.out.println(responseString);
             
-			//EmailSender.sendEmail(dispatchPacket.toString(4));
             if (response.getStatusLine().getStatusCode() == 200) {
             	dataForDispatching.removeAll(auxDataForDispatching);
             }
